@@ -1,0 +1,14 @@
+requests
+pydicom
+miblab[data,dlseg]
+dbdicom
+numpy
+vreg
+matplotlib
+pydmr
+pyradiomics
+moviepy
+scipy
+napari[all]
+nnunetv2
+google-cloud-aiplatform
