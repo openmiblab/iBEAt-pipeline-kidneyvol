@@ -1,2 +1,2 @@
-# iBEAt-vol-osf
-iBEAt volumetry with data on OSF
+# iBEAt-kidney-volumetry
+iBEAt kidney volumetry analysis

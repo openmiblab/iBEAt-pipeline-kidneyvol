@@ -9,20 +9,13 @@ from utils import plot, data
 from utils.constants import SITE_IDS
 
 
-datapath = os.path.join(os.getcwd(), 'build', 'dixon', 'stage_2_data')
-maskpath = os.path.join(os.getcwd(), 'build', 'kidneyvol', 'stage_1_segment')
-displaypath = os.path.join(os.getcwd(), 'build', 'kidneyvol', 'stage_2_display')
-os.makedirs(displaypath, exist_ok=True)
 
-# Set up logging
-logging.basicConfig(
-    filename=os.path.join(displaypath, 'error.log'),
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+def mosaic(build_path, group, site=None):
 
-
-def mosaic(group, site=None):
+    datapath = os.path.join(build_path, 'dixon', 'stage_2_data')
+    maskpath = os.path.join(build_path, 'kidneyvol', 'stage_1_segment')
+    displaypath = os.path.join(build_path, 'kidneyvol', 'stage_2_display')
+    os.makedirs(displaypath, exist_ok=True)
 
     if group == 'Controls':
         sitedatapath = os.path.join(datapath, "Controls") 

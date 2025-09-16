@@ -162,25 +162,15 @@ TOTSEG = [
     ('3128_131', 'Baseline'),
     ('3128_133', 'Baseline'),
     ('3128_137', 'Baseline'),
-
-
 ]
 
 
-datapath = os.path.join(os.getcwd(), 'build', 'dixon', 'stage_2_data') 
-maskpath = os.path.join(os.getcwd(), 'build', 'kidneyvol', 'stage_1_segment') 
-os.makedirs(maskpath, exist_ok=True)
 
+def segment_site(build_path, group, site=None, batch_size=None):
 
-# Set up logging
-logging.basicConfig(
-    filename=os.path.join(maskpath, 'error.log'),
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
-
-
-def segment_site(group, site=None, batch_size=None):
+    datapath = os.path.join(build_path, 'dixon', 'stage_2_data') 
+    maskpath = os.path.join(build_path, 'kidneyvol', 'stage_1_segment') 
+    os.makedirs(maskpath, exist_ok=True)
 
     if group == 'Controls':
         sitedatapath = os.path.join(datapath, group) 

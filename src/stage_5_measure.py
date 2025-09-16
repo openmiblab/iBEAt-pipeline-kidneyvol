@@ -10,21 +10,9 @@ import pydmr
 
 from utils import data, radiomics
 
-datapath = os.path.join(os.getcwd(), 'build', 'dixon', 'stage_2_data')
-automaskpath = os.path.join(os.getcwd(), 'build', 'kidneyvol', 'stage_1_segment')
-editmaskpath = os.path.join(os.getcwd(), 'build', 'kidneyvol', 'stage_3_edit')
-measurepath = os.path.join(os.getcwd(), 'build', 'kidneyvol', 'stage_5_measure')
-os.makedirs(measurepath, exist_ok=True)
-
-# Set up logging
-logging.basicConfig(
-    filename=os.path.join(measurepath, 'error.log'),
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
 
 
-def concat(group, site=None):
+def concat(measurepath, group, site=None):
     if group == 'Controls':
         sitemeasurepath = os.path.join(measurepath, "Controls") 
     else:   
@@ -40,7 +28,13 @@ def concat(group, site=None):
         shutil.rmtree(dir)
 
 
-def measure(group, site=None):
+def measure(build_path, group, site=None):
+
+    datapath = os.path.join(build_path, 'dixon', 'stage_2_data')
+    automaskpath = os.path.join(build_path, 'kidneyvol', 'stage_1_segment')
+    editmaskpath = os.path.join(build_path, 'kidneyvol', 'stage_3_edit')
+    measurepath = os.path.join(build_path, 'kidneyvol', 'stage_5_measure')
+    os.makedirs(measurepath, exist_ok=True)
 
     if group == 'Controls':
         sitedatapath = os.path.join(datapath, "Controls") 
@@ -165,4 +159,4 @@ def measure(group, site=None):
         # Write results to file
         pydmr.write(dmr_file, dmr)
 
-    concat(site)
+    concat(measurepath, site)

@@ -9,19 +9,8 @@ import dbdicom as db
 from utils import data, radiomics
 
 
-PATH = os.path.join(os.getcwd(), 'build')
-datapath = os.path.join(PATH, 'dixon', 'stage_2_data')
-maskpath = os.path.join(PATH, 'kidneyvol', 'stage_1_segment')
-editpath = os.path.join(PATH, 'kidneyvol', 'stage_3_edit')
-os.makedirs(editpath, exist_ok=True)
 
 
-# Set up logging
-logging.basicConfig(
-    filename=os.path.join(editpath, 'error.log'),
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
 
 SITE = {
     '1128': 'Bari',
@@ -75,7 +64,14 @@ def edit_mask_with_napari(image_3d: np.ndarray, mask_3d: np.ndarray) -> np.ndarr
     return mask_layer.data
 
 
-def edit_auto_masks(group, site=None):
+
+
+def auto_masks(build_path, group, site=None):
+
+    datapath = os.path.join(build_path, 'dixon', 'stage_2_data')
+    maskpath = os.path.join(build_path, 'kidneyvol', 'stage_1_segment')
+    editpath = os.path.join(build_path, 'kidneyvol', 'stage_3_edit')
+    os.makedirs(editpath, exist_ok=True)
 
     if group == 'Controls':
         sitedatapath = os.path.join(datapath, "Controls") 
@@ -123,8 +119,14 @@ def edit_auto_masks(group, site=None):
             #   db.write_volume(vol, edited_mask_series, ref=series_op)
 
 
-def convert_manual_masks():
-    # This converts masks made by Hugo using the original pipeline (downloaded from google drive)
+
+def convert_manual_masks(build_path):
+    # Retained for historical reference only
+    # In the first implementation some masks were corrected manually via a different setup
+    # This function harmonizes these after downloading so they did not have to be redone.
+
+    editpath = os.path.join(build_path, 'kidneyvol', 'stage_3_edit')
+    os.makedirs(editpath, exist_ok=True)
 
     # Extract all sub folders if needed
     manual_mask_path = "C:\\Users\\md1spsx\\Documents\\Data\\iBEAt\\Edited_kidney_masks_2025_06_25"

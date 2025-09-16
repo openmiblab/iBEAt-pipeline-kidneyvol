@@ -3,9 +3,9 @@ import os
 import dbdicom as db
 
 
-def archive_autosegmentation(group, site=None):
-    datapath = os.path.join(os.getcwd(), 'build', 'kidneyvol', 'stage_1_segment')
-    archivepath = os.path.join("G:\\Shared drives", "iBEAt Build", 'kidneyvol', 'stage_1_segment')
+def autosegmentation(build_path, archive_path, group, site=None):
+    datapath = os.path.join(build_path, 'kidneyvol', 'stage_1_segment')
+    archivepath = os.path.join(archive_path, 'kidneyvol', 'stage_1_segment')
     if group == 'Controls':
         sitedatapath = os.path.join(datapath, "Controls") 
         sitearchivepath = os.path.join(archivepath, 'Controls')
@@ -15,9 +15,9 @@ def archive_autosegmentation(group, site=None):
     db.archive(sitedatapath, sitearchivepath)
 
 
-def archive_edits(group, site=None):
-    datapath = os.path.join(os.getcwd(), 'build', 'kidneyvol', 'stage_3_edit')
-    archivepath = os.path.join("G:\\Shared drives", "iBEAt Build", 'kidneyvol', 'stage_3_edit')
+def edits(build_path, archive_path, group, site=None):
+    datapath = os.path.join(build_path, 'kidneyvol', 'stage_3_edit')
+    archivepath = os.path.join(archive_path, 'kidneyvol', 'stage_3_edit')
     if group == 'Controls':
         sitedatapath = os.path.join(datapath, "Controls") 
         sitearchivepath = os.path.join(archivepath, 'Controls')

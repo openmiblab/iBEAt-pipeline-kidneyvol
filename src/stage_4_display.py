@@ -8,22 +8,28 @@ import dbdicom as db
 from utils import plot, data
 
 
-datapath = os.path.join(os.getcwd(), 'build', 'dixon', 'stage_2_data')
-automaskpath = os.path.join(os.getcwd(), 'build', 'kidneyvol', 'stage_1_segment')
-editmaskpath = os.path.join(os.getcwd(), 'build', 'kidneyvol', 'stage_3_edit')
-displaypath = os.path.join(os.getcwd(), 'build', 'kidneyvol', 'stage_4_display')
-os.makedirs(displaypath, exist_ok=True)
 
 
-# Set up logging
-logging.basicConfig(
-    filename=os.path.join(displaypath, 'error.log'),
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
 
+def movie(build_path, group, site=None):
 
-def movie(sitedatapath, sitemaskpath, sitedisplaypath):
+    datapath = os.path.join(build_path, 'dixon', 'stage_2_data')
+    automaskpath = os.path.join(build_path, 'kidneyvol', 'stage_1_segment')
+    editmaskpath = os.path.join(build_path, 'kidneyvol', 'stage_3_edit')
+    displaypath = os.path.join(build_path, 'kidneyvol', 'stage_4_display')
+    os.makedirs(displaypath, exist_ok=True)
+
+    if group == 'Controls':
+        sitedatapath = os.path.join(datapath, "Controls") 
+        siteautomaskpath = os.path.join(automaskpath, "Controls")
+        siteeditmaskpath = os.path.join(editmaskpath, "Controls")
+        sitedisplaypath = os.path.join(displaypath, "Controls")
+    else:
+        sitedatapath = os.path.join(datapath, "Patients", site) 
+        siteautomaskpath = os.path.join(automaskpath, "Patients", site)
+        siteeditmaskpath = os.path.join(editmaskpath, "Patients", site)
+        sitedisplaypath = os.path.join(displaypath, "Patients", site)
+    os.makedirs(sitedisplaypath, exist_ok=True)
 
     # Build output folders
     movies_kidneys = os.path.join(displaypath, sitedisplaypath, 'Movies')
@@ -33,7 +39,7 @@ def movie(sitedatapath, sitemaskpath, sitedisplaypath):
     class_map = {1: "kidney_left", 2: "kidney_right"}
 
     # Loop over the masks
-    for mask in tqdm(db.series(sitemaskpath), 'Displaying masks..'):
+    for mask in tqdm(db.series(siteautomaskpath), 'Displaying masks..'):
 
         # Get the corresponding outphase series
         patient_id = mask[1]
@@ -60,7 +66,16 @@ def movie(sitedatapath, sitemaskpath, sitedisplaypath):
             logging.error(f"{patient_id} {sequence} error building movie: {e}")
 
 
-def mosaic(group, site=None):
+
+
+def mosaic(build_path, group, site=None):
+
+    datapath = os.path.join(build_path, 'dixon', 'stage_2_data')
+    automaskpath = os.path.join(build_path, 'kidneyvol', 'stage_1_segment')
+    editmaskpath = os.path.join(build_path, 'kidneyvol', 'stage_3_edit')
+    displaypath = os.path.join(build_path, 'kidneyvol', 'stage_4_display')
+    os.makedirs(displaypath, exist_ok=True)
+
     if group == 'Controls':
         sitedatapath = os.path.join(datapath, "Controls") 
         siteautomaskpath = os.path.join(automaskpath, "Controls")
