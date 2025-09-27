@@ -8,7 +8,7 @@ import torch
 
 
 import utils.data
-from utils import radiomics
+from utils import edit
 from utils.constants import SITE_IDS
 
 
@@ -256,7 +256,7 @@ def segment_site(build_path, group, site=None, batch_size=None):
                 # Relabel left and right
                 label_array[label_array==3] = 1
                 # Remove smaller disconnected clusters
-                label_array = radiomics.largest_cluster_label(label_array)
+                label_array = edit.largest_cluster_label(label_array)
             except Exception as e:
                 logging.error(f"Error processing {patient} {sequence} with total segmentator: {e}")
                 continue

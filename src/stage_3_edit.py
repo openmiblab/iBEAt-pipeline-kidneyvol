@@ -6,7 +6,7 @@ import numpy as np
 import napari
 import dbdicom as db
 
-from utils import data, radiomics
+from utils import data, edit
 
 
 
@@ -184,7 +184,7 @@ def convert_manual_masks(build_path):
                     values_lk[values_lk>=0.5]=1
                     values += values_lk
             # Save kidney label as DICOM
-            values = radiomics.largest_cluster_label(values)
+            values = edit.largest_cluster_label(values)
             vol = (values.astype(np.int16), vol_dixon.affine)
             siteeditpath = os.path.join(editpath, SITE[patient_id[:4]], 'Patients')
             os.makedirs(siteeditpath, exist_ok=True)

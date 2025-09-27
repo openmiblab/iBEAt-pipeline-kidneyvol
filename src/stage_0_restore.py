@@ -26,6 +26,8 @@ def segmentations(archivepath, buildpath, group, site=None):
         sitearchivepath = os.path.join(local_archivepath, 'Patients', site)
     db.restore(sitearchivepath, sitebuildpath)
 
+
+def edited_segmentations(archivepath, buildpath, group, site=None):
     local_buildpath = os.path.join(buildpath, 'kidneyvol', 'stage_3_edit')
     local_archivepath = os.path.join(archivepath, "kidneyvol", "stage_3_edit")
     if group == 'Controls':

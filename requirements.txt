@@ -12,3 +12,6 @@ scipy==1.15.3
 napari[all]==0.6.1
 nnunetv2==2.6.2
 google-cloud-aiplatform==1.71.1
+trimesh
+rtree
+pyglet<2
