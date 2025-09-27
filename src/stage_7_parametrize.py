@@ -53,6 +53,7 @@ def normalize_kidneys(build_path):
         
         vol = None
 
+
 def display_all_normalizations(build_path, group=None, site=None):
 
     # Paths

@@ -6,7 +6,7 @@ import stage_1_segment
 import stage_2_display
 import stage_3_edit
 import stage_4_display
-#import stage_5_measure
+import stage_5_measure
 import stage_6_archive
 import stage_7_parametrize
 
@@ -54,17 +54,19 @@ def run_manual_section():
 def run_postprocessing():
 
     group = 'Controls'
-    stage_4_display.mosaic(BUILD_PATH, group, site)
-    #stage_5_measure.measure(BUILD_PATH, group, site)
-    stage_6_archive.autosegmentation(BUILD_PATH, ARCHIVE_PATH, group, site)
-    stage_6_archive.edits(BUILD_PATH, ARCHIVE_PATH, group, site)
+    # stage_4_display.mosaic(BUILD_PATH, group)
+    stage_5_measure.measure_shape(BUILD_PATH, group)
+    # stage_6_archive.autosegmentation(BUILD_PATH, ARCHIVE_PATH, group)
+    # stage_6_archive.edits(BUILD_PATH, ARCHIVE_PATH, group)
 
     group = 'Patients'
     for site in ['Exeter', 'Leeds', 'Bari', 'Bordeaux', 'Sheffield', 'Turku']:
-        stage_4_display.mosaic(BUILD_PATH, group, site)
-        #stage_5_measure.measure(BUILD_PATH, group, site)
-        stage_6_archive.autosegmentation(BUILD_PATH, ARCHIVE_PATH, group, site)
-        stage_6_archive.edits(BUILD_PATH, ARCHIVE_PATH, group, site)
+        # stage_4_display.mosaic(BUILD_PATH, group, site)
+        stage_5_measure.measure_shape(BUILD_PATH, group, site)
+        # stage_6_archive.autosegmentation(BUILD_PATH, ARCHIVE_PATH, group, site)
+        # stage_6_archive.edits(BUILD_PATH, ARCHIVE_PATH, group, site)
+
+    stage_5_measure.combine(BUILD_PATH)
 
 def run_shape_analysis():
 
@@ -85,6 +87,8 @@ if __name__ == '__main__':
 
     # run_preprocessing()
     # run_manual_section()
-    # run_postprocessing()
-    run_shape_analysis()
+    run_postprocessing()
+    # run_shape_analysis()
+
+    
 
