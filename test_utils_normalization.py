@@ -33,7 +33,7 @@ def test_normalization():
     # Normalize
     spacing_norm = 1.0
     volume_norm = 1e6
-    mask_norm, params = normalize.volume_normalize_mask(mask, voxel_size, spacing_norm, volume_norm, mirror_axis=None)
+    mask_norm, params = normalize.normalize_kidney_mask(mask, voxel_size, 'right')
 
     print(f"Target normalized mask volume (L): {volume_norm / 1e6}")
     print(f"Actual normalized mask volume (L): {mask_norm.sum() * spacing_norm ** 3 / 1e6}")

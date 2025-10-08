@@ -9,10 +9,62 @@ from scipy.stats import skew as scipy_skew
 # -------------------------------
 # Dice coefficient
 # -------------------------------
-def dice_coefficient(a, b):
-    a, b = a.astype(bool), b.astype(bool)
-    inter = np.logical_and(a, b).sum()
-    return 2.0 * inter / (a.sum() + b.sum() + 1e-9)
+
+
+def covariance(x, y):
+    """
+    Compute the covariance between two 1D vectors x and y.
+
+    Parameters
+    ----------
+    x : array-like, shape (n,)
+    y : array-like, shape (n,)
+
+    Returns
+    -------
+    cov : float
+        Covariance between x and y.
+    """
+    x = np.asarray(x)
+    y = np.asarray(y)
+    if x.shape != y.shape:
+        raise ValueError("x and y must have the same shape")
+    n = x.size
+    cov = np.sum((x - x.mean()) * (y - y.mean())) / (n - 1)
+    return cov
+
+
+def dice_coefficient(mask1: np.ndarray, mask2: np.ndarray) -> float:
+    """
+    Compute the Dice similarity coefficient between two binary masks.
+
+    Parameters
+    ----------
+    mask1 : np.ndarray
+        First binary mask (values should be 0 or 1).
+    mask2 : np.ndarray
+        Second binary mask (values should be 0 or 1).
+
+    Returns
+    -------
+    float
+        Dice coefficient, ranging from 0 (no overlap) to 1 (perfect overlap).
+
+    Notes
+    -----
+    The Dice coefficient is defined as:
+        Dice = 2 * |A ∩ B| / (|A| + |B|)
+    """
+    mask1 = mask1.astype(bool)
+    mask2 = mask2.astype(bool)
+
+    intersection = np.logical_and(mask1, mask2).sum()
+    size_sum = mask1.sum() + mask2.sum()
+
+    if size_sum == 0:
+        return 1.0  # Both masks empty → perfect similarity
+    return 2.0 * intersection / size_sum
+
 
 
 def inertia_principal_axes(volume, voxel_size=(1.0,1.0,1.0), eps=1e-12):
@@ -101,109 +153,174 @@ def pca_affine(original_affine, centroid, eigvecs):
 
 
 
-def projection_skewness(mask, centroid, axis, voxel_size, radius=10):
+def second_vector_cone_dir(mask, centroid, eigvec1, voxel_size, cone_angle=10):
+    """Orient the eigenvector int he direction of
+    the half-cone (defined by angular aperture around that axis) with the least mass.
+
+    This function works but is not used at the moment as the cone sweep appears 
+    prefereable. Could be reinstated if a decision is made later on to stick to 
+    eigenvectors after all.
+
+    Args:
+        mask (numpy.ndarray): Binary mask (3D volume).
+        centroid (numpy.ndarray): 3-element centroid.
+        eigvec1 (numpy.ndarray): In-plane unit vector 1.
+        voxel_size (numpy.ndarray): 3-element voxel dimensions.
+        cone_angle (float, optional): Cone aperture (degrees). Defaults to 10.
+
+    Returns:
+        numpy.ndarray: Unit vector (3,) in the plane, pointing toward the lighter half.
     """
-    Compute skewness of voxel projections along an axis from a 3D binary mask,
-    using only voxels at a given perpendicular distance (± tol) from the axis.
+    # normalize eigenvectors
+    eigvec1 = eigvec1 / np.linalg.norm(eigvec1)
 
-    Parameters
-    ----------
-    mask : (X,Y,Z) array, bool or int
-        3D binary image (nonzero = inside kidney).
-    centroid : (3,) array
-        A point on the axis (in voxel/world coordinates).
-    axis : (3,) array
-        Axis direction vector (e.g. eigenvector).
-    voxel_size : tuple of 3 floats
-        Physical size (mm) of a voxel along (x,y,z).
-    radius : float
-        Target perpendicular distance from axis in physical units (mm).
+    # voxel coordinates in physical units, shifted to centroid
+    coords = np.argwhere(mask > 0).astype(float) * voxel_size
+    coords -= centroid
 
-    Returns
-    -------
-    skew : float
-        Skewness of projection values.
+    if coords.shape[0] == 0:
+        return eigvec1  # empty mask
+
+    cos_cone = np.cos(np.deg2rad(cone_angle / 2))  # use half-angle for selection
+
+    # Sweep candidate directions in plane
+    d = eigvec1
+
+    # normalize coords for angle test
+    norms = np.linalg.norm(coords, axis=1)
+    valid = norms > 0
+    unit_coords = np.zeros_like(coords)
+    unit_coords[valid] = coords[valid] / norms[valid, None]
+
+    # angle test: voxel inside cone if dot(u, d) >= cos(theta)
+    dots = np.abs(unit_coords @ d)
+    cone_voxels = coords[dots >= cos_cone]
+
+    # project onto candidate axis
+    proj = cone_voxels @ d
+
+    left_mass = np.sum(proj < 0)
+    right_mass = np.sum(proj >= 0)
+
+    best_vec = -d if left_mass < right_mass else d
+
+    return best_vec
+
+
+
+def second_vector_cone_sweep(mask, centroid, eigvec1, eigvec2, voxel_size, cone_angle=10, angle_step=1):
+    """Find a direction lying in the plane of eigvec1 & eigvec2 that points to
+    the half-cone (defined by angular aperture around that axis) with the least mass.
+
+    If multiple directions have the same minimum mass, the middle candidate is chosen.
+
+    Args:
+        mask (numpy.ndarray): Binary mask (3D volume).
+        centroid (numpy.ndarray): 3-element centroid.
+        eigvec1 (numpy.ndarray): In-plane unit vector 1.
+        eigvec2 (numpy.ndarray): In-plane unit vector 2.
+        voxel_size (numpy.ndarray): 3-element voxel dimensions.
+        cone_angle (float, optional): Cone aperture (degrees). Defaults to 30.
+        angle_step (float, optional): Step size (degrees) for candidate sweep. Defaults to 1.
+
+    Returns:
+        numpy.ndarray: Unit vector (3,) in the plane, pointing toward the lighter half.
     """
-    # find all voxel coordinates (in index space)
-    idxs = np.argwhere(mask > 0)  # (N,3) in (x,y,z)
+    # normalize eigenvectors
+    eigvec1 = eigvec1 / np.linalg.norm(eigvec1)
+    eigvec2 = eigvec2 / np.linalg.norm(eigvec2)
 
-    # convert to world coordinates
-    coords = idxs.astype(float) * voxel_size  # reorder to (x,y,z)
+    # voxel coordinates in physical units, shifted to centroid
+    coords = np.argwhere(mask > 0).astype(float) * voxel_size
+    coords -= centroid
 
-    c = np.asarray(centroid, dtype=float).reshape(3)
-    e = np.asarray(axis, dtype=float).reshape(3)
+    if coords.shape[0] == 0:
+        return eigvec1  # empty mask
 
-    # normalize axis
-    e = e / np.linalg.norm(e)
+    cos_cone = np.cos(np.deg2rad(cone_angle / 2))  # use half-angle for selection
 
-    # vectors from centroid to points
-    v = coords - c[None, :]
-    # projections along axis
-    t = v.dot(e)
-    # perpendicular distance
-    perp = v - np.outer(t, e)
-    dist = np.linalg.norm(perp, axis=1)
+    candidates = []  # store (lighter_mass, angle, direction)
 
-    # select radial band
-    t_sel = t[dist < radius] # Projection values for selected voxels.
-    # sel_idxs = idxs[mask_band] # indices of selected voxels - not needed here.
-    n = t_sel.size
+    # Sweep candidate directions in plane
+    for angle in np.arange(0, 180, angle_step):
+        rad = np.deg2rad(angle)
+        d = np.cos(rad) * eigvec1 + np.sin(rad) * eigvec2
+        d /= np.linalg.norm(d)
 
-    if n < 3:
-        return 0
-    else:
-        return scipy_skew(t_sel)
-    
+        # normalize coords for angle test
+        norms = np.linalg.norm(coords, axis=1)
+        valid = norms > 0
+        unit_coords = np.zeros_like(coords)
+        unit_coords[valid] = coords[valid] / norms[valid, None]
 
-def kidney_eigenvecs(mask, centroid, eigvecs, eigvals, voxel_size, radius=10):
-    # Best so far but not perfect
+        # angle test: voxel inside cone if dot(u, d) >= cos(theta)
+        dots = np.abs(unit_coords @ d)
+        cone_voxels = coords[dots >= cos_cone]
 
-    # Ensure that the order and direction of the eigenvectors is defined by intrinsic shape.
-    # i=0: kidney sagittal (through the hilum pointing out)
-    # i=1: kidney transversal (right hand rule - pointing right if you look into the hole)
-    # i=2: kidney longitudinal (bottom to top pole)
+        if cone_voxels.shape[0] == 0:
+            continue  # skip empty cone
 
-    indices = [0,1,2]
+        # project onto candidate axis
+        proj = cone_voxels @ d
 
-    # Find eigenvector along FH (normally first - principal axis)
-    # Point it to the top of the kidney assuming the y-axis is head to feet
+        left_mass = np.sum(proj < 0)
+        right_mass = np.sum(proj >= 0)
+        lighter_mass = min(left_mass, right_mass)
+
+        # orient toward lighter side
+        d_oriented = -d if left_mass < right_mass else d
+        candidates.append((lighter_mass, angle, d_oriented))
+
+    if not candidates:
+        return eigvec1
+
+    # find minimum lighter_mass
+    min_mass = min(c[0] for c in candidates)
+
+    # filter candidates with min_mass
+    min_candidates = [c for c in candidates if c[0] == min_mass]
+
+    # choose the middle one by angle
+    min_candidates.sort(key=lambda x: x[1])
+    middle_idx = len(min_candidates) // 2
+    best_vec = min_candidates[middle_idx][2]
+
+    return best_vec
+
+
+
+def kidney_canonical_axes(mask, centroid, eigvecs, voxel_size):
+    """
+    Returns orthogonal vectors in a canonical reference frame optimized 
+    for normalization of kidney shapes.
+
+    - The z-axis (kidney longitudinal) is the principal eigenvector oriented fro  head to foot
+    - The x-axis (kidney sagittal) is perpendicular to the longitudinal axis, through the 
+      centroid and pointing in the direction with least mass in a small cone around the axis
+    - The y-axis (kidney transverse) is derived from the first two so as to make a right-handed 
+      X,Y,Z Cartesian reference frame
+    """
+
+    # Find eigenvector along FH 
     foot_to_head = [0,-1,0]
-    # proj_foot_to_head = [abs(np.dot(eigvecs[:,i], foot_to_head)) for i in indices]
-    # foot_to_head_axis_index = proj_foot_to_head.index(max(proj_foot_to_head))
-    foot_to_head_axis_index = 0
-    foot_to_head_axis = eigvecs[:, foot_to_head_axis_index].copy()
-    if np.dot(foot_to_head_axis, foot_to_head) < 0:
-        foot_to_head_axis *= -1
+    longitudinal_axis = eigvecs[:, 0].copy()
+    if np.dot(longitudinal_axis, foot_to_head) < 0:
+        longitudinal_axis *= -1
 
-    indices.remove(foot_to_head_axis_index)
-
-    # For the remaining axis, project points within a certain distance 
-    # on the axis and compute skewness of the distribution. The idea 
-    # is that the axis with most skewness is pointing through the hole. 
-    # This is the secondary axis (kidney axial). The third is the transversal
-
-    # Find eigenvector with maximal skewness (out of the hilum)
-    skew = [projection_skewness(mask, centroid, eigvecs[:,i], voxel_size, radius) for i in indices]
-    abs_skew = [np.abs(s) for s in skew]
-    maximal_skewness_index = abs_skew.index(max(abs_skew))
-    sagittal_axis_index = indices[maximal_skewness_index]
-    sagittal_axis = eigvecs[:, sagittal_axis_index].copy()
-    if skew[maximal_skewness_index] < 0:
-        sagittal_axis *= -1
-
-    # Find kidney transversal eigenvector
-    transversal_axis = np.cross(foot_to_head_axis, sagittal_axis)
+    # Decide direction of the secondary axes
+    sagittal_axis = second_vector_cone_sweep(mask, centroid, eigvecs[:,1], eigvecs[:,2], voxel_size)
+    transversal_axis = np.cross(longitudinal_axis, sagittal_axis)
 
     # Build new eigenvectors
-    eigvecs_std = np.zeros((3,3)) #  
-    eigvecs_std[:,0] = sagittal_axis 
-    eigvecs_std[:,1] = transversal_axis
-    eigvecs_std[:,2] = foot_to_head_axis
+    canonical_axes = np.zeros((3,3))  
+    canonical_axes[:,0] = sagittal_axis 
+    canonical_axes[:,1] = transversal_axis
+    canonical_axes[:,2] = longitudinal_axis
 
-    return eigvecs_std
-    
+    return canonical_axes
 
-def volume_normalize_mask(mask, voxel_size=(1.0,1.0,1.0), target_spacing=1.0, target_volume=1e6, mirror_axis=None):
+
+def normalize_kidney_mask(mask, voxel_size, side):
     """
     Normalize a 3D binary mask using mesh-based PCA alignment and scaling.
     Centers the mesh in the middle of the volume grid.
@@ -212,22 +329,33 @@ def volume_normalize_mask(mask, voxel_size=(1.0,1.0,1.0), target_spacing=1.0, ta
     # shape features such as eigenvalues of normalized volumes. Also 
     # rotation angles versus patient reference frame (obliqueness).
 
+    if side not in ['left', 'right']:
+        raise ValueError(
+            f"The side argument must be either 'left' or 'right'. "
+            f"You have entered {side}. "
+        )
+    if np.size(voxel_size) != 3:
+        raise ValueError("Voxel size must have 3 elements.")
+    if np.ndim(mask) != 3:
+        raise ValueError("mask must be 3D. ")
+ 
     # voxel size in mm
     # target_volume in mm3
+    target_spacing = 1.0
+    target_volume = 1e6
 
     # Optional mirroring
-    if mirror_axis is not None:
-        mask = np.flip(mask, mirror_axis)
+    if side == 'left':
+        mask = np.flip(mask, 0)
 
     # Build volume with identity affine and a corner on the origina
     volume = vreg.volume(mask.astype(float), spacing=voxel_size)
 
     # Align principal axes to reference frame
     centroid, eigvecs, eigvals = inertia_principal_axes(mask, voxel_size)
-    # eigvecs = kidney_eigenvecs_v1(eigvecs)
-    eigvecs = kidney_eigenvecs(mask, centroid, eigvecs, eigvals, voxel_size, radius=10)
-    new_affine = pca_affine(volume.affine, centroid, eigvecs)
-    volume.set_affine(new_affine)
+    canonical_axes = kidney_canonical_axes(mask, centroid, eigvecs, voxel_size)
+    canonical_affine = pca_affine(volume.affine, centroid, canonical_axes)
+    volume.set_affine(canonical_affine)
 
     # Scale to target volume
     voxel_volume = np.prod(voxel_size)
@@ -247,154 +375,15 @@ def volume_normalize_mask(mask, voxel_size=(1.0,1.0,1.0), target_spacing=1.0, ta
     mask_norm = volume.values > 0.5
 
     params = {
-        "original_shape": mask.shape,
-        "voxel_size": voxel_size,
         "centroid": centroid,
+        "eigvecs": eigvecs,
+        "eigvals": eigvals,
         "scale": scale,
+        "canonical_axes": canonical_axes,
+        "canonical_affine": canonical_affine,
+        "scale": scale,
+        "output_affine": target_affine,
     }
 
     return mask_norm, params
 
-# -------------------------
-# Normalize mask
-# -------------------------
-
-def mask_to_mesh(mask, spacing=(1.0, 1.0, 1.0)):
-    """Convert 3D binary mask to triangular mesh."""
-    verts, faces, normals, values = measure.marching_cubes(
-        mask.astype(float), level=0.5, spacing=spacing
-    )
-    mesh = trimesh.Trimesh(vertices=verts, faces=faces, process=False)
-    return mesh
-
-
-
-def mesh_to_mask(mesh, shape, pitch):
-    """
-    Voxelize a mesh into a binary mask of given shape and voxel pitch.
-    
-    Args:
-        mesh (trimesh.Trimesh): Input mesh.
-        shape (tuple[int]): Shape of the output mask (z,y,x).
-        pitch (float or tuple[float]): Voxel size in mm. Can be scalar or (dx,dy,dz).
-    
-    Returns:
-        mask (ndarray): Binary mask of shape `shape`.
-    """
-    # If scalar pitch, convert to 3-tuple
-    if np.isscalar(pitch):
-        pitch = (pitch, pitch, pitch)
-    pitch = np.array(pitch, dtype=float)
-
-    # Voxelize mesh
-    voxelized = mesh.voxelized(pitch=min(pitch))  # voxelized() only accepts scalar pitch
-
-    # Map voxel coordinates to the target grid
-    coords = voxelized.points / pitch  # scale to original voxel dimensions
-    coords = np.round(coords).astype(int)
-
-    # Allocate mask
-    mask = np.zeros(shape, dtype=bool)
-
-    # Clip to valid indices
-    valid = (
-        (coords[:, 0] >= 0) & (coords[:, 0] < shape[0]) &
-        (coords[:, 1] >= 0) & (coords[:, 1] < shape[1]) &
-        (coords[:, 2] >= 0) & (coords[:, 2] < shape[2])
-    )
-    coords = coords[valid]
-    mask[coords[:, 0], coords[:, 1], coords[:, 2]] = True
-
-    return mask
-
-def normalize_mask(mask, voxel_size=(1.0,1.0,1.0), target_volume=1e6, mirror_axis=None):
-    """
-    Normalize a 3D binary mask using mesh-based PCA alignment and scaling.
-    Centers the mesh in the middle of the volume grid.
-    """
-    voxel_size = np.array(voxel_size, dtype=float)
-    original_shape = np.array(mask.shape, dtype=float)
-
-    # Step 1: Mask → Mesh
-    mesh = mask_to_mesh(mask, spacing=voxel_size)
-
-    # # Step 2: Center at origin
-    centroid = mesh.vertices.mean(axis=0)
-    mesh.vertices -= centroid
-
-    # Step 2: PCA alignment
-    cov = np.cov(mesh.vertices.T)
-    eigvals, eigvecs = np.linalg.eigh(cov)
-    idx = np.argsort(eigvals)[::-1]
-    rotation = eigvecs[:, idx]
-    mesh.vertices = mesh.vertices @ rotation
-
-    # Step 3: Scale based on physical volume
-    voxel_volume = np.prod(voxel_size)
-    current_volume = mask.sum() * voxel_volume
-    scale = (target_volume / current_volume) ** (1/3)
-    mesh.vertices *= scale
-
-    # Step 4: Optional mirroring
-    if mirror_axis is not None:
-        mesh.vertices[:, mirror_axis] *= -1
-
-    # Step 5: Translate so mesh is centered in the grid
-    volume_center = voxel_size * original_shape / 2.0
-    mesh.vertices += volume_center
-
-    # Step 6: Build normalized mesh and rasterize back
-    iso_pitch = float(min(voxel_size))
-    shape_iso = np.ceil(original_shape * voxel_size / iso_pitch).astype(int)
-    mask_norm = mesh_to_mask(mesh, shape_iso, iso_pitch)
-
-    params = {
-        "original_shape": mask.shape,
-        "voxel_size": voxel_size,
-        "centroid": centroid,
-        "scale": scale,
-        "rotation": rotation,
-        "translation": volume_center,
-        "mirrored_axis": mirror_axis,
-        'iso_pitch': iso_pitch,
-    }
-
-    return mask_norm, params
-
-
-def denormalize_mask(mask_norm, params):
-    """
-    Reverse the normalization of a 3D mask.
-
-    Args:
-        mask_norm (ndarray): Normalized binary mask.
-        params (dict): Dictionary returned by normalize_mask.
-
-    Returns:
-        mask_recon (ndarray): Mask in the original space.
-    """
-    
-    # Step 1: Mask → Mesh
-    iso_pitch = params['iso_pitch']
-    mesh = mask_to_mesh(mask_norm, spacing = 3 * [iso_pitch])
-
-    # Step 2: Translate mesh back from grid center
-    mesh.vertices -= params['translation']
-
-    # Step 3: Undo mirroring
-    if params['mirrored_axis'] is not None:
-        mesh.vertices[:, params['mirrored_axis']] *= -1
-
-    # Step 4: Undo scaling
-    mesh.vertices /= params['scale']
-
-    # Step 5: Undo PCA rotation
-    mesh.vertices = mesh.vertices @ params['rotation'].T
-
-    # Step 6: Add original centroid
-    mesh.vertices += params['centroid']
-
-    # Step 7: Rasterize back to original mask shape with original voxel_size
-    mask_recon = mesh_to_mask(mesh, shape=params['original_shape'], pitch=params['voxel_size'])
-
-    return mask_recon

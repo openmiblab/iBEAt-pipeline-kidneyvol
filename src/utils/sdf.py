@@ -43,12 +43,14 @@ def reconstruct_from_dct(coeffs_trunc, norm="ortho"):
     mask_recon = sdf_recon < 0
     return mask_recon, sdf_recon
 
-def coeffs_from_mask(mask, keep_shape=None):
+def coeffs_from_mask(mask, keep_shape=None, normalize=False):
+    mask = mask.astype(bool)
     coeffs = dctn(sdf_from_mask(mask))
-    if keep_shape is None:
-        return coeffs
-    else:
-        return truncate_dct(coeffs, keep_shape)
+    if keep_shape is not None:
+        coeffs = truncate_dct(coeffs, keep_shape)
+    if normalize:
+        coeffs /= np.max(coeffs)
+    return coeffs
 
 def mask_from_coeffs(coeffs):
     return idctn(coeffs) < 0

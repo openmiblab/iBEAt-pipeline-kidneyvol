@@ -35,6 +35,33 @@ def mask_to_mesh(mask, spacing=(1.0,1.0,1.0)):
     return mesh
 
 
+def mask_to_mesh_fixed_vertices(mask: np.ndarray, spacing: np.ndarray, target_vertices: int = 5000) -> trimesh.Trimesh:
+    """
+    Convert a 3D binary mask to a mesh with a fixed number of vertices.
+
+    Parameters
+    ----------
+    center : bool
+        If True, center the mesh at the origin.
+    spacing : np.ndarray
+        Voxel size
+
+    Returns
+    -------
+    mesh_simplified : trimesh.Trimesh
+        Mesh object with approximately target_vertices vertices.
+    """
+    # Step 1: extract surface using marching cubes
+    verts, faces, normals, _ = measure.marching_cubes(mask.astype(float), level=0.5, spacing=spacing)
+
+    mesh = trimesh.Trimesh(vertices=verts, faces=faces, vertex_normals=normals, process=True)
+
+    # Step 2: simplify / resample to target number of vertices
+    # Needs testing
+    mesh_simplified = mesh.simplify_quadratic_decimation(target_vertices)
+
+    return mesh_simplified
+
 
 # -------------------------------
 # 2️⃣ Preprocessing for invariance (FIXED)
@@ -120,6 +147,41 @@ def surface_to_coefficients(mesh, k=50):
     coeffs = eigvecs.T @ coords  # shape (k,3)
     return coeffs, eigvecs, eigvals
 
+
+def rotationally_invariant_lb_coeffs(coeffs, eigvals, k=100):
+    """
+    Compute rotationally invariant Laplace–Beltrami spectral coefficients.
+
+    Parameters
+    ----------
+    mesh : trimesh.Trimesh or similar
+        Input surface mesh with vertices (N, 3)
+    k : int
+        Number of eigenmodes to use
+
+    Returns
+    -------
+    eigvals : (k,) array
+        Laplace–Beltrami eigenvalues
+    invariants : (k,) array
+        Rotationally invariant spectral coefficients
+    """
+    invariants = np.linalg.norm(coeffs, axis=1)  # sqrt(sum over x,y,z)
+    invariants /= np.linalg.norm(invariants)
+
+    # Optional: normalize eigenvalues by first non-zero eigenvalue
+    eigvals = eigvals / eigvals[1] if eigvals[1] != 0 else eigvals
+
+    # Optionally drop the first eigenvalue (zero mode) from descriptor since it's trivial
+    eigvals = eigvals[1:]  # length k-1
+    invariants = invariants[1:]  # skip first mode as it may be trivial
+
+    descriptor = np.concatenate([eigvals[:k], invariants[:k]])
+    descriptor /= np.linalg.norm(descriptor)  # normalize final vector
+
+    return invariants, eigvals
+
+
 # def coefficients_to_surface(coeffs, eigvecs):
 #     reconstructed = eigvecs @ coeffs
 #     return reconstructed
@@ -162,10 +224,24 @@ def coefficients_to_surface(coeffs, eigvecs, threshold=None):
 
 
 def pipeline(mask, k=50):
-    mesh = mask_to_mesh(mask)
+    # mesh = mask_to_mesh(mask)
+    # Fixed number of vertices is necessary to achieve comparable coefficients
+    mesh = mask_to_mesh_fixed_vertices(mask)
     mesh_proc, params = preprocess_mesh(mesh)
     coeffs, eigvecs, eigvals = surface_to_coefficients(mesh_proc, k=k)
     return coeffs, eigvecs, mesh_proc, params
+
+def eigvals(mask, k=100, normalize=False):
+    mesh = mask_to_mesh(mask)
+    coeffs, eigvecs, eigvals = surface_to_coefficients(mesh, k=k)
+    if normalize:
+        # Normalize eigenvalues by first non-zero eigenvalue
+        # eigvals = eigvals / eigvals[1] if eigvals[1] != 0 else eigvals
+        eigvals = eigvals / np.max(eigvals)
+        # Drop the first eigenvalue (zero mode) from descriptor since it's trivial
+        eigvals = eigvals[1:]  # length k-1
+    return eigvals
+
 
 def process(mesh, k=10, threshold=None):
     mesh_proc, params = preprocess_mesh(mesh)

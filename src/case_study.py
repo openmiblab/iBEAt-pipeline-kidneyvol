@@ -12,9 +12,16 @@ from utils import normalize, render, lb, sdf
 DIXONS = os.path.join(os.getcwd(), 'build', 'dixon', 'stage_2_data')
 SEGMENTATIONS = os.path.join(os.getcwd(), 'build', 'kidneyvol', 'stage_3_edit')
 
-patient = '1128_003'
-study = 'Visit1'
-study = 'Baseline'
+patient = '4128_031'
+# patient = '4128_C08'
+# patient = '4128_033'
+# patient = '4128_064'
+# patient = '1128_038'
+# patient = '1128_081'
+# patient = '4128_C25'
+# patient = '4128_C22'
+# patient = '7128_014'
+study = 'Visit1' if 'C' in patient else 'Baseline'
 task = 'kidney_masks'
 
 
@@ -47,6 +54,28 @@ def display_surface_sdf():
     render.display_volumes(mask_norm, mask_norm_recon)
 
 
+def display_multiple_normalized():
+
+    for patient in ['4128_031', '4128_C08', '4128_033', '4128_064', '1128_038', '1128_081', '4128_C25', '4128_C22', '7128_014']:
+
+        study = 'Visit1' if 'C' in patient else 'Baseline'
+        series = [SEGMENTATIONS, patient, study, task]
+        vol = db.volume(series)
+        voxel_size = vol.spacing
+        spacing_norm = 1.0
+        volume_norm = 1e6
+        voxel_size_norm = 3 * [spacing_norm]
+
+        rk_mask = vol.values == 2
+        rk_mask_norm, _ = normalize.normalize_kidney_mask(rk_mask, voxel_size, 'right')
+        render.display_kidney_normalization(rk_mask, rk_mask_norm, voxel_size, voxel_size_norm, title='Right kidney')
+
+        lk_mask = vol.values == 1
+        lk_mask_norm, _ = normalize.normalize_kidney_mask(lk_mask, voxel_size, 'left')
+        render.display_kidney_normalization(np.flip(lk_mask, 0), lk_mask_norm, voxel_size, voxel_size_norm, title='Left kidney flipped')
+
+
+
 def display_normalized():
     series = [SEGMENTATIONS, patient, study, task]
     vol = db.volume(series)
@@ -56,11 +85,11 @@ def display_normalized():
     voxel_size_norm = 3 * [spacing_norm]
 
     rk_mask = vol.values == 2
-    rk_mask_norm, _ = normalize.volume_normalize_mask(rk_mask, voxel_size, spacing_norm, volume_norm, mirror_axis=None)
-    render.display_kidney_normalization(rk_mask, rk_mask_norm, voxel_size, voxel_size_norm, title='Right kidney')
+    rk_mask_norm, _ = normalize.normalize_kidney_mask(rk_mask, voxel_size, 'right')
+    render.display_kidney_normalization(rk_mask, rk_mask_norm, title='Right kidney')
 
     lk_mask = vol.values == 1
-    lk_mask_norm, _ = normalize.volume_normalize_mask(lk_mask, voxel_size, spacing_norm, volume_norm, mirror_axis=0)
+    lk_mask_norm, _ = normalize.normalize_kidney_mask(lk_mask, voxel_size, 'left')
     render.display_kidney_normalization(np.flip(lk_mask, 0), lk_mask_norm, voxel_size, voxel_size_norm, title='Left kidney flipped')
 
     return
@@ -92,4 +121,5 @@ def display_normalized():
 if __name__=='__main__':
     # display_surface_lb()
     # display_surface_sdf()
-    display_normalized()
+    # display_normalized()
+    display_multiple_normalized()

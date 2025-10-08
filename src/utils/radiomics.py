@@ -227,6 +227,8 @@ def volume_features(vol, roi):
 
 def shape_features(roi_vol, roi):
 
+    # TODO: replace by numpyradiomics and check results
+
     with tempfile.TemporaryDirectory() as tmp:
         roi_file = os.path.join(tmp, 'roi.nii.gz')
         img_file = os.path.join(tmp, 'img.nii.gz') # dummy

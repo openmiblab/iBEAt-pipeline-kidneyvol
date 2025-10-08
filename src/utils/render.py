@@ -175,146 +175,135 @@ def display_volume(original_volume, voxel_size=(1.0,1.0,1.0)):
     plotter.show()
 
 
-# def display_kidney_normalization_v1(kidney, kidney_norm, kidney_voxel_size=(1.0,1.0,1.0), kidney_norm_voxel_size=None, title='Kidney normalization'):
-#     """
-#     Visualize original and reconstructed 3D volumes in PyVista with correct proportions.
-#     """
-#     kidney_voxel_size = np.array(kidney_voxel_size, dtype=float)
-#     if kidney_norm_voxel_size is None:
-#         kidney_norm_voxel_size = kidney_voxel_size
-#     plotter = pv.Plotter(window_size=(800,600), shape=(1,2))
-#     plotter.background_color = 'white'
+import numpy as np
+import pyvista as pv
 
-#     # Wrap original volume
-#     orig_vol = pv.wrap(kidney.astype(float))
-#     orig_vol.spacing = kidney_voxel_size
-#     orig_surface = orig_vol.contour(isosurfaces=[0.5])
-#     plotter.subplot(0,0)
-#     plotter.add_text(f"{title} (original)", font_size=12)
-#     plotter.add_mesh(
-#         orig_surface, color='lightblue', opacity=1.0, style='surface',     
-#         ambient=0.1,           # ambient term
-#         diffuse=0.9,           # diffuse shading
-#     )
-#     # Add wireframe box around original volume
-#     bounds = orig_vol.bounds  # (xmin, xmax, ymin, ymax, zmin, zmax)
-#     box = pv.Box(bounds=bounds)
-#     plotter.add_mesh(box, color='black', style='wireframe', line_width=2)
-#     add_axes(plotter, xlabel='L', ylabel='F', zlabel='P', color=("red", "green", "blue"))
-
-#     # Wrap reconstructed volume
-#     recon_vol = pv.wrap(kidney_norm.astype(float))
-#     recon_vol.spacing = kidney_norm_voxel_size
-#     recon_surface = recon_vol.contour(isosurfaces=[0.5])
-#     plotter.subplot(0,1)
-#     plotter.add_text(f"{title} (normalized)", font_size=12)
-#     plotter.add_mesh(recon_surface, color='lightblue', opacity=1.0, style='surface',
-#         ambient=0.1,           # ambient term
-#         diffuse=0.9,           # diffuse shading
-#     )
-#     # Add wireframe box around original volume
-#     bounds = recon_vol.bounds  # (xmin, xmax, ymin, ymax, zmin, zmax)
-#     box = pv.Box(bounds=bounds)
-#     plotter.add_mesh(box, color='black', style='wireframe', line_width=2)
-#     add_axes(plotter, xlabel='LO', ylabel='PO', zlabel='HO', color=("red", "blue", "green"))
-
-#     # Set the camera position and show the plot
-#     plotter.camera_position = 'iso'
-#     plotter.show()
-
-
-def display_kidney_normalization(kidney, kidney_norm, kidney_voxel_size=(1.0,1.0,1.0), kidney_norm_voxel_size=None, title='Kidney normalization'):
+def compute_principal_axes(mask, voxel_size):
     """
-    Visualize original and reconstructed 3D volumes in PyVista with correct proportions.
+    Compute centroid and orthonormal principal axes (right-handed) for a 3D binary mask.
+    Returns centroid (world coords) and axes (3x3 matrix, columns are orthonormal axes).
     """
-    kidney_voxel_size = np.array(kidney_voxel_size, dtype=float)
+    coords = np.argwhere(mask > 0).astype(float)  # (N,3) indices (z,y,x) or (i,j,k)
+    if coords.size == 0:
+        raise ValueError("Empty mask provided to compute_principal_axes.")
+    # Convert to physical/world coordinates by multiplying by voxel spacing
+    voxel_size = np.asarray(voxel_size, float)
+    coords_world = coords * voxel_size  # broadcasting (N,3) * (3,) -> (N,3)
+
+    centroid = coords_world.mean(axis=0)
+    centered = coords_world - centroid  # (N,3)
+
+    # SVD on centered coords: Vt rows are principal directions; columns of V are axes
+    U, S, Vt = np.linalg.svd(centered, full_matrices=False)
+    axes = Vt.T  # shape (3,3) columns are principal directions (unit length)
+
+    # Ensure orthonormal (numerical safety) via QR or re-normalize columns
+    # Re-normalize columns
+    for i in range(3):
+        axes[:, i] = axes[:, i] / (np.linalg.norm(axes[:, i]) + 1e-12)
+
+    # Make right-handed: if determinant negative, flip third axis
+    if np.linalg.det(axes) < 0:
+        axes[:, 2] = -axes[:, 2]
+
+    return centroid, axes
+
+def add_principal_axes(plotter, centroid_world, axes, bounds, colors=("red","green","blue")):
+    """
+    Add principal axes as rays (lines through centroid extending to volume bounds).
+    
+    Args:
+        plotter (pv.Plotter): pyvista plotter
+        centroid_world (np.ndarray): centroid in world coordinates
+        axes (np.ndarray): 3x3 matrix, columns are unit direction vectors
+        bounds (tuple): (xmin, xmax, ymin, ymax, zmin, zmax)
+        colors (tuple): colors for the three axes
+    """
+    centroid_world = np.asarray(centroid_world, float)
+    bounds = np.asarray(bounds).reshape(3,2)  # [[xmin,xmax],[ymin,ymax],[zmin,zmax]]
+
+    for i in range(3):
+        dir_vec = axes[:, i]
+        dir_vec /= np.linalg.norm(dir_vec) + 1e-12
+
+        # For each direction ±dir_vec, compute intersection with bounding box planes
+        line_pts = []
+        for sign in (-1, 1):
+            d = dir_vec * sign
+            t_vals = []
+            for dim in range(3):
+                if abs(d[dim]) > 1e-12:
+                    for plane in bounds[dim]:
+                        t = (plane - centroid_world[dim]) / d[dim]
+                        if t > 0:  # forward intersection
+                            t_vals.append(t)
+            if len(t_vals) > 0:
+                t_min = min(t_vals)
+                pt = centroid_world + d * t_min
+                line_pts.append(pt)
+
+        if len(line_pts) == 2:
+            line = pv.Line(line_pts[0], line_pts[1])
+            plotter.add_mesh(line, color=colors[i], line_width=4, opacity=0.8)
+
+
+# def add_principal_axes(plotter, centroid_world, axes, scale=100.0, colors=("red","green","blue")):
+#     """
+#     Add principal axes as rays (lines through centroid in ± directions).
+#     """
+#     centroid_world = np.asarray(centroid_world, float)
+#     for i in range(3):
+#         direction = axes[:, i] / (np.linalg.norm(axes[:, i]) + 1e-12)
+#         p1 = centroid_world - direction * scale
+#         p2 = centroid_world + direction * scale
+#         line = pv.Line(p1, p2)
+#         plotter.add_mesh(line, color=colors[i], line_width=4, opacity=0.8)
+
+def display_kidney_normalization(kidney, kidney_norm,
+                                 kidney_voxel_size=(1.0,1.0,1.0),
+                                 kidney_norm_voxel_size=None,
+                                 title='Kidney normalization',
+                                 axis_scale=100.0):
+    """
+    Visualize original and normalized kidneys and overlay computed principal axes.
+    """
+    kidney_voxel_size = np.asarray(kidney_voxel_size, float)
     if kidney_norm_voxel_size is None:
         kidney_norm_voxel_size = kidney_voxel_size
-    plotter = pv.Plotter(window_size=(800,600), shape=(1,2))
+    kidney_norm_voxel_size = np.asarray(kidney_norm_voxel_size, float)
+
+    # compute centroids & axes
+    centroid_orig, axes_orig = compute_principal_axes(kidney, kidney_voxel_size)
+    centroid_norm, axes_norm = compute_principal_axes(kidney_norm, kidney_norm_voxel_size)
+
+    plotter = pv.Plotter(window_size=(1000,600), shape=(1,2))
     plotter.background_color = 'white'
 
-    # Wrap original volume
+    # Original
     orig_vol = pv.wrap(kidney.astype(float))
-    orig_vol.spacing = kidney_voxel_size
-    orig_surface = orig_vol.contour(isosurfaces=[0.5])
+    orig_vol.spacing = kidney_voxel_size  # ensures world coordinates are correct
+    orig_surf = orig_vol.contour(isosurfaces=[0.5])
+
     plotter.subplot(0,0)
     plotter.add_text(f"{title} (original)", font_size=12)
-    plotter.add_mesh(
-        orig_surface, color='lightblue', opacity=1.0, style='surface',     
-        ambient=0.1,           # ambient term
-        diffuse=0.9,           # diffuse shading
-    )
-    # Add wireframe box around original volume
-    bounds = orig_vol.bounds  # (xmin, xmax, ymin, ymax, zmin, zmax)
-    box = pv.Box(bounds=bounds)
-    plotter.add_mesh(box, color='black', style='wireframe', line_width=2)
+    plotter.add_mesh(orig_surf, color='lightblue', opacity=1.0, style='surface', ambient=0.1, diffuse=0.9)
+    # box
+    plotter.add_mesh(pv.Box(bounds=orig_vol.bounds), color='black', style='wireframe', line_width=2)
     add_axes(plotter, xlabel='L', ylabel='F', zlabel='P', color=("red", "green", "blue"))
+    add_principal_axes(plotter, centroid_orig, axes_orig, bounds=orig_vol.bounds, colors=("black","black","black"))
 
-    # Wrap reconstructed volume
+    # Normalized
     recon_vol = pv.wrap(kidney_norm.astype(float))
     recon_vol.spacing = kidney_norm_voxel_size
-    recon_surface = recon_vol.contour(isosurfaces=[0.5])
+    recon_surf = recon_vol.contour(isosurfaces=[0.5])
+
     plotter.subplot(0,1)
     plotter.add_text(f"{title} (normalized)", font_size=12)
-    plotter.add_mesh(recon_surface, color='lightblue', opacity=1.0, style='surface',
-        ambient=0.1,           # ambient term
-        diffuse=0.9,           # diffuse shading
-    )
-    # Add wireframe box around original volume
-    bounds = recon_vol.bounds  # (xmin, xmax, ymin, ymax, zmin, zmax)
-    box = pv.Box(bounds=bounds)
-    plotter.add_mesh(box, color='black', style='wireframe', line_width=2)
+    plotter.add_mesh(recon_surf, color='lightblue', opacity=1.0, style='surface', ambient=0.1, diffuse=0.9)
+    plotter.add_mesh(pv.Box(bounds=recon_vol.bounds), color='black', style='wireframe', line_width=2)
     add_axes(plotter, xlabel='O', ylabel='L', zlabel='T', color=("red", "blue", "green"))
-    # T = Top (bottom to top)
-    # O = Out (out of the hilum)
-    # L = left (from right to left)
+    add_principal_axes(plotter, centroid_norm, axes_norm, bounds=recon_vol.bounds, colors=("black","black","black"))
 
-    # Set the camera position and show the plot
-    plotter.camera_position = 'iso'
-    plotter.show()
-
-def display_normalized_kidneys(rk_kidney, lk_kidney, voxel_size=(1.0,1.0,1.0)):
-    """
-    Visualize original and reconstructed 3D volumes in PyVista with correct proportions.
-    """
-    voxel_size = np.array(voxel_size, dtype=float)
-    plotter = pv.Plotter(window_size=(800,600), shape=(1,2))
-    plotter.background_color = 'white'
-
-    # Wrap original volume
-    orig_vol = pv.wrap(rk_kidney.astype(float))
-    orig_vol.spacing = voxel_size
-    orig_surface = orig_vol.contour(isosurfaces=[0.5])
-    plotter.subplot(0,0)
-    plotter.add_text(f"Right kidney", font_size=12)
-    plotter.add_mesh(
-        orig_surface, color='lightblue', opacity=1.0, style='surface',     
-        ambient=0.1,           # ambient term
-        diffuse=0.9,           # diffuse shading
-    )
-    # Add wireframe box around original volume
-    bounds = orig_vol.bounds  # (xmin, xmax, ymin, ymax, zmin, zmax)
-    box = pv.Box(bounds=bounds)
-    plotter.add_mesh(box, color='black', style='wireframe', line_width=2)
-    add_axes(plotter, xlabel='LO', ylabel='PO', zlabel='HO', color=("red", "blue", "green"))
-
-    # Wrap reconstructed volume
-    recon_vol = pv.wrap(lk_kidney.astype(float))
-    recon_vol.spacing = voxel_size
-    recon_surface = recon_vol.contour(isosurfaces=[0.5])
-    plotter.subplot(0,1)
-    plotter.add_text(f"Left kidney flipped", font_size=12)
-    plotter.add_mesh(recon_surface, color='lightblue', opacity=1.0, style='surface',
-        ambient=0.1,           # ambient term
-        diffuse=0.9,           # diffuse shading
-    )
-    # Add wireframe box around original volume
-    bounds = recon_vol.bounds  # (xmin, xmax, ymin, ymax, zmin, zmax)
-    box = pv.Box(bounds=bounds)
-    plotter.add_mesh(box, color='black', style='wireframe', line_width=2)
-    add_axes(plotter, xlabel='LO', ylabel='PO', zlabel='HO', color=("red", "blue", "green"))
-
-    # Set the camera position and show the plot
     plotter.camera_position = 'iso'
     plotter.show()
 

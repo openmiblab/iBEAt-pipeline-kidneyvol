@@ -12,6 +12,7 @@ import stage_7_parametrize
 
 
 BUILD_PATH = os.path.join(os.getcwd(), 'build')
+DATA_PATH = os.path.join(os.getcwd(), 'src', 'data')
 ARCHIVE_PATH = "G:\\Shared drives\\iBEAt_Build"
 os.makedirs(BUILD_PATH, exist_ok=True)
 
@@ -55,40 +56,49 @@ def run_postprocessing():
 
     group = 'Controls'
     # stage_4_display.mosaic(BUILD_PATH, group)
-    stage_5_measure.measure_shape(BUILD_PATH, group)
+    # stage_5_measure.measure_shape(BUILD_PATH, group)
     # stage_6_archive.autosegmentation(BUILD_PATH, ARCHIVE_PATH, group)
     # stage_6_archive.edits(BUILD_PATH, ARCHIVE_PATH, group)
 
-    group = 'Patients'
-    for site in ['Exeter', 'Leeds', 'Bari', 'Bordeaux', 'Sheffield', 'Turku']:
+    # group = 'Patients'
+    # for site in ['Exeter', 'Leeds', 'Bari', 'Bordeaux', 'Sheffield', 'Turku']:
         # stage_4_display.mosaic(BUILD_PATH, group, site)
-        stage_5_measure.measure_shape(BUILD_PATH, group, site)
+        # stage_5_measure.measure_shape(BUILD_PATH, group, site)
         # stage_6_archive.autosegmentation(BUILD_PATH, ARCHIVE_PATH, group, site)
         # stage_6_archive.edits(BUILD_PATH, ARCHIVE_PATH, group, site)
 
-    stage_5_measure.combine(BUILD_PATH)
+    # stage_5_measure.measure_shape(BUILD_PATH, 'Patients', 'Bari')
+    # stage_6_archive.edits(BUILD_PATH, ARCHIVE_PATH, 'Patients', 'Bari')
+
+    # stage_5_measure.combine(BUILD_PATH)
+    # stage_5_measure.export_to_redcap(BUILD_PATH)
+
 
 def run_shape_analysis():
 
     # stage_7_parametrize.normalize_kidneys(BUILD_PATH)
-    stage_7_parametrize.display_all_normalizations(BUILD_PATH)
-    # stage_7_parametrize.build_dice_correlations(BUILD_PATH)
+    # stage_7_parametrize.display_all_normalizations(BUILD_PATH)
     # stage_7_parametrize.build_spectral_feature_vectors(BUILD_PATH)
     # stage_7_parametrize.build_binary_feature_vectors(BUILD_PATH)
     # stage_7_parametrize.principal_component_analysis(BUILD_PATH)
+    # stage_7_parametrize.display_subject_clusters(BUILD_PATH, DATA_PATH)
+    stage_7_parametrize.build_dice_correlation_matrix(BUILD_PATH)
+    # stage_7_parametrize.build_all_correlation_matrices(BUILD_PATH)
 
     # NOTE: Display by site
     # stage_7_parametrize.display_all_normalizations(BUILD_PATH, 'Controls')
     # for site in ['Bordeaux', 'Exeter', 'Leeds', 'Bari', 'Sheffield', 'Turku']:
     #     stage_7_parametrize.display_all_normalizations(BUILD_PATH, 'Patients', site)
 
+    # stage_6_archive.normalizations(BUILD_PATH, ARCHIVE_PATH)
+
 
 if __name__ == '__main__':
 
     # run_preprocessing()
     # run_manual_section()
-    run_postprocessing()
-    # run_shape_analysis()
+    # run_postprocessing()
+    run_shape_analysis()
 
     
 

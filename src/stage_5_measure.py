@@ -2,12 +2,14 @@ import os
 import logging
 import shutil
 from pathlib import Path
+from datetime import date
 
 from tqdm import tqdm
 import numpy as np
 import dbdicom as db
 import vreg
 import pydmr
+import pandas as pd
 
 from utils import data, radiomics
 
@@ -30,8 +32,39 @@ def combine(build_path):
         dmr_file = os.path.join(measurepath, f'{group}_kidneyvol')
         pydmr.concat(dmr_files, dmr_file)
 
-        # Append parsed biomarkers in the dictionary for convenience 
+
+def export_to_redcap(build_path):
+    """
+    Create export for upload to redcap repository
+    """
+    today = date.today().strftime("%Y-%m-%d")
+    measurepath = os.path.join(build_path, 'kidneyvol', 'stage_5_measure')
+    resultspath = os.path.join(build_path, 'kidneyvol', 'stage_5_measure', 'RedCap')
+    os.makedirs(resultspath, exist_ok=True)
+
+    def visit_nr(value):
+        if value == 'Baseline':
+            return 0
+        if value == 'Followup':
+            return 2
+        if value[:5] == 'Visit':
+            return int(value[5]) - 1
+        
+    def fix_exeter_volunteer(harmonized_id, visit_nr):
+        # Correct a mistake in ID 
+        # Exeter volunteer 3 is the same person as volunteer 1
+        # This needs to be removed when the issue is fixed at the source
+        if harmonized_id == 'iBE-3128C03':
+            harmonized_id = 'iBE-3128C01'
+            visit_nr += 2
+        return harmonized_id, visit_nr
+
+    for group in ['Controls', 'Patients']:
+        dmr_file = os.path.join(measurepath, f'{group}_kidneyvol')
         dmr = pydmr.read(dmr_file)
+
+        # Append parsed biomarkers in the dictionary
+        dmr_output_file = os.path.join(resultspath, f'{group}_KidneyShape_{today}')
         dmr['columns'] = ['body_part', 'image', 'biomarker_category', 'biomarker']
         for p in dmr['data']:
             parts = p.split('-')
@@ -39,40 +72,38 @@ def combine(build_path):
             if len(parts) == 3:
                 parts = [parts[0]] + ['mask'] + parts[1:]
             dmr['data'][p] += parts
-        pydmr.write(dmr_file, dmr)
 
-        # # Keep only shape parameters at this stage - radiomics markers 
-        # # need further analysis first
-        # pydmr.keep(dmr_file, biomarker_category=['shape_ski', 'shape_rad'])
+        # Change PatientIDs to central format
+        pars_harmonized = {}
+        for p,v in dmr['pars'].items():
+            harmonized_id = f"iBE-{p[0].replace('_','')}"
+            visit = visit_nr(p[1])
+            harmonized_id, visit = fix_exeter_volunteer(harmonized_id, visit)
+            pars_harmonized[(harmonized_id, visit, p[2])] = v
+        dmr['pars'] = pars_harmonized
+        pydmr.write(dmr_output_file, dmr)
 
-        # # Drop volume_of_holes - not a meaningful marker
-        # pydmr.drop(dmr_file, biomarker=['volume_of_holes'])
+        # 1. Save in long format with additional columns
+        long_format_file = os.path.join(resultspath, f'{group}_KidneyShape_{today}.csv')
+        pydmr.pars_to_long(dmr_output_file, long_format_file)
+        # Replace column names
 
-        # # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        # # Temporary fix to convert old to new units. This needs to be 
-        # # taken out when the measurements are derived again from scratch
-        # dmr = pydmr.read(dmr_file)
-        # for p,v in dmr['data'].items():
-        #     biomarker = f"shape_{v[6]}"
-        #     if biomarker in radiomics.biomarker_units:
-        #         v[1] = radiomics.biomarker_units[biomarker]
-        # for row, value in dmr['pars'].items():
-        #     biomarker = f"shape_{dmr['data'][row[2]][6]}"
-        #     if biomarker in radiomics.biomarker_units:
-        #         value = float(value) * radiomics.conversion_factor[biomarker]
-        #         dmr['pars'][row] = value
-        # pydmr.write(dmr_file, dmr)
-        # # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        # 2. Save in wide format
+        wide_format_file = os.path.join(resultspath, f'{group}_KidneyShape_{today}_wide.csv')
+        pydmr.pars_to_wide(dmr_output_file, wide_format_file)
 
-        # Create derived formats for convenience
-
-        # 1. Long format with additional columns (units, type, description)
-        long_format_file = os.path.join(measurepath, f'{group}_kidneyvol_long.csv')
-        pydmr.pars_to_long(dmr_file, long_format_file)
-
-        # 2. Wide format
-        wide_format_file = os.path.join(measurepath, f'{group}_kidneyvol_wide.csv')
-        pydmr.pars_to_wide(dmr_file, wide_format_file)
+        # Replace column names
+        new_cols = {
+            "subject": "harmonized_id",
+            "study": "visit_nr",
+            "value": "result",
+        }
+        df = pd.read_csv(long_format_file)
+        df.rename(columns=new_cols, inplace=True)
+        df.to_csv(long_format_file, index=False)
+        df = pd.read_csv(wide_format_file)
+        df.rename(columns=new_cols, inplace=True)
+        df.to_csv(wide_format_file, index=False)
         
 
 
@@ -124,7 +155,7 @@ def measure_shape(build_path, group, site=None):
             continue
 
         # Get mask volume (edited if it exists, else automated)
-        vol = db.volume(mask_series)
+        vol = db.volume(mask_series, verbose=0)
         
         # Loop over the classes
         for idx, roi in class_map.items():
