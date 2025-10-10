@@ -76,6 +76,7 @@ def run_postprocessing():
 
 def run_shape_analysis():
 
+    stage_0_restore.normalized_kidneys(ARCHIVE_PATH, BUILD_PATH)
     # stage_7_parametrize.normalize_kidneys(BUILD_PATH)
     # stage_7_parametrize.display_all_normalizations(BUILD_PATH)
     # stage_7_parametrize.build_spectral_feature_vectors(BUILD_PATH)

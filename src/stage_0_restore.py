@@ -38,5 +38,10 @@ def edited_segmentations(archivepath, buildpath, group, site=None):
         sitearchivepath = os.path.join(local_archivepath, 'Patients', site)
     db.restore(sitearchivepath, sitebuildpath)
 
+def normalized_kidneys(archivepath, buildpath):
+    buildpath = os.path.join(buildpath, 'kidneyvol', 'stage_7_normalized')
+    archivepath = os.path.join(archivepath, "kidneyvol", "stage_7_normalized")
+    db.restore(archivepath, buildpath)
+
 
 
