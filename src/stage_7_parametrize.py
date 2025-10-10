@@ -170,16 +170,16 @@ def display_subject_clusters(build_path, data_path):
 
     for cluster, cluster_ids in clusters.items():
 
-        if cluster<=3: # !!!! temporary - got this one already
-            continue
+        # if cluster<=3: # !!!! temporary - got this one already
+        #     continue
 
         # Get masks for the cluster
         cluster_masks = [k for k in all_masks if k[1] in cluster_ids]
 
         for kidney in ['right', 'left']:
 
-            if cluster==4 and kidney=='right': # !!!!! temporary - got this one already
-                continue
+            # if cluster==4 and kidney=='right': # !!!!! temporary - got this one already
+            #     continue
 
             # Get masks for the kidney
             masks = [k for k in cluster_masks if k[3][0] == f'normalized_{kidney}_kidney_mask']
@@ -255,8 +255,8 @@ def display_kidney_clusters(build_path, data_path):
 
     for cluster, cluster_ids in clusters.items():
 
-        if cluster==1:
-            continue
+        # if cluster==1:
+        #     continue
 
         # Get masks for the cluster
         cluster_masks = []
