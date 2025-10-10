@@ -82,7 +82,9 @@ def run_shape_analysis():
     # stage_7_parametrize.build_binary_feature_vectors(BUILD_PATH)
     # stage_7_parametrize.principal_component_analysis(BUILD_PATH)
     # stage_7_parametrize.display_subject_clusters(BUILD_PATH, DATA_PATH)
-    stage_7_parametrize.build_dice_correlation_matrix(BUILD_PATH)
+    # stage_7_parametrize.display_kidney_clusters(BUILD_PATH, DATA_PATH)
+    stage_5_measure.measure_normalized_mask_shape(BUILD_PATH)
+    # stage_7_parametrize.build_dice_correlation_matrix(BUILD_PATH)
     # stage_7_parametrize.build_all_correlation_matrices(BUILD_PATH)
 
     # NOTE: Display by site
@@ -93,12 +95,15 @@ def run_shape_analysis():
     # stage_6_archive.normalizations(BUILD_PATH, ARCHIVE_PATH)
 
 
+
+
 if __name__ == '__main__':
 
     # run_preprocessing()
     # run_manual_section()
     # run_postprocessing()
     run_shape_analysis()
+
 
     
 

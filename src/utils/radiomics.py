@@ -243,7 +243,7 @@ def shape_features(roi_vol, roi):
             shape = [
                 "Elongation",
                 "Flatness",
-                # "LeastAxisLength", # seems unstable
+                "LeastAxisLength", # seems unstable
                 "MajorAxisLength",
                 "Maximum2DDiameterColumn",
                 "Maximum2DDiameterRow",

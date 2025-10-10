@@ -106,51 +106,28 @@ def export_to_redcap(build_path):
         df.to_csv(wide_format_file, index=False)
         
 
-
-def concat_patient(measurepath, group, site=None):
-    """ 
-    Concatenate all dmr files of each subject into a single 
-    dmr file and delete the originals.
-    """
-    # Concatenate all dmr files of each subject
-    if group == 'Controls':
-        sitemeasurepath = os.path.join(measurepath, "Controls") 
-    else:   
-        sitemeasurepath = os.path.join(measurepath, "Patients", site)
-    
-    patients = [f.path for f in os.scandir(sitemeasurepath) if f.is_dir()]
-    for patient in patients:
-        dir = os.path.join(sitemeasurepath, patient)
-        dmr_files = [f for f in os.listdir(dir) if f.endswith('.dmr.zip')]
-        dmr_files = [os.path.join(dir, f) for f in dmr_files]
-        dmr_file = os.path.join(sitemeasurepath, f'{patient}_results')
-        pydmr.concat(dmr_files, dmr_file)
-        shutil.rmtree(dir)
-
-
-
 def measure_shape(build_path, group, site=None):
 
     editmaskpath = os.path.join(build_path, 'kidneyvol', 'stage_3_edit')
     measurepath = os.path.join(build_path, 'kidneyvol', 'stage_5_measure')
     if group == 'Controls':
-        siteeditmaskpath = os.path.join(editmaskpath, "Controls")
-        sitemeasurepath = os.path.join(measurepath, "Controls")         
+        maskpath = os.path.join(editmaskpath, "Controls")
+        measurepath = os.path.join(measurepath, "Controls")         
     else:
-        siteeditmaskpath = os.path.join(editmaskpath, "Patients", site)
-        sitemeasurepath = os.path.join(measurepath, "Patients", site)
+        maskpath = os.path.join(editmaskpath, "Patients", site)
+        measurepath = os.path.join(measurepath, "Patients", site)
 
     class_map = {1: "kidney_left", 2: "kidney_right"}
-    all_editmasks = db.series(siteeditmaskpath)
+    all_masks = db.series(maskpath)
 
-    for mask_series in tqdm(all_editmasks, desc='Extracting metrics'):
+    for mask_series in tqdm(all_masks, desc='Extracting metrics'):
 
         patient, study, series = mask_series[1], mask_series[2][0], mask_series[3][0]
-        dir = os.path.join(sitemeasurepath, patient)
+        dir = os.path.join(measurepath, patient)
         os.makedirs(dir, exist_ok=True)
 
         # If the patient results exist, skip
-        dmr_file = os.path.join(sitemeasurepath, f'{patient}_results')
+        dmr_file = os.path.join(measurepath, f'{patient}_results')
         if os.path.exists(f'{dmr_file}.dmr.zip'):
             continue
 
@@ -171,30 +148,88 @@ def measure_shape(build_path, group, site=None):
                 continue
 
             roi_vol = vreg.volume(mask, vol.affine)
-            dmr = {'data':{}, 'pars':{}}
+            _measure_kidney_mask_shape(roi_vol, roi, dmr_file, mask_series)
 
-            # Get skimage features
-            try:
-                results = radiomics.volume_features(roi_vol, roi)
-            except Exception as e:
-                logging.error(f"Patient {patient} {roi} - error computing ski-shapes: {e}")
-            else:
-                dmr['data'] = dmr['data'] | {p: v[1:] for p, v in results.items()}
-                dmr['pars'] = dmr['pars'] | {(patient, study, p): v[0] for p, v in results.items()}
+    # Concatenate all dmr files of each subject into a single 
+    # dmr file and delete the originals.
+    if group == 'Controls':
+        sitemeasurepath = os.path.join(measurepath, "Controls") 
+    else:   
+        sitemeasurepath = os.path.join(measurepath, "Patients", site)
 
-            # Get radiomics shape features
-            try:
-                results = radiomics.shape_features(roi_vol, roi)
-            except Exception as e:
-                logging.error(f"Patient {patient} {roi} - error computing radiomics-shapes: {e}")
-            else:
-                dmr['data'] = dmr['data'] | {p:v[1:] for p, v in results.items()}
-                dmr['pars'] = dmr['pars'] | {(patient, study, p): v[0] for p, v in results.items()}
+    patients = [f.path for f in os.scandir(sitemeasurepath) if f.is_dir()]
+    for patient in patients:
+        dir = os.path.join(sitemeasurepath, patient)
+        dmr_files = [f for f in os.listdir(dir) if f.endswith('.dmr.zip')]
+        dmr_files = [os.path.join(dir, f) for f in dmr_files]
+        dmr_file = os.path.join(sitemeasurepath, f'{patient}_results')
+        pydmr.concat(dmr_files, dmr_file)
+        shutil.rmtree(dir)
 
-            # Write results to file
-            pydmr.write(dmr_file, dmr)
 
-    concat_patient(measurepath, group, site)
+def measure_normalized_mask_shape(build_path):
+
+    maskpath = os.path.join(build_path, 'kidneyvol', 'stage_7_normalized')
+    measurepath = os.path.join(build_path, 'kidneyvol', 'stage_7_tmp')
+    os.makedirs(measurepath, exist_ok=True)
+
+    all_masks = db.series(maskpath)
+    all_dmr_files = []
+
+    for mask_series in tqdm(all_masks, desc='Extracting metrics'):
+
+        patient, series = mask_series[1], mask_series[3][0]
+
+        # If the results exist, skip
+        roi = 'kidney_left' if 'left' in series else 'kidney_right'
+        dmr_file = os.path.join(measurepath, f'{patient}_{roi}_results')
+        if os.path.exists(f'{dmr_file}.dmr.zip'):
+            continue
+
+        # Get mask volume (edited if it exists, else automated)
+        vol = db.volume(mask_series, verbose=0)
+
+        # Binary mask
+        mask = vol.values.astype(np.float32)
+        if np.sum(mask) == 0:
+            continue
+
+        roi_vol = vreg.volume(mask, vol.affine)
+        _measure_kidney_mask_shape(roi_vol, roi, dmr_file, mask_series)
+
+        all_dmr_files.append(dmr_file)
+
+    dmr_file = os.path.join(build_path, 'kidneyvol', f'stage_7_normalized_measures')
+    pydmr.concat(all_dmr_files, dmr_file)
+    shutil.rmtree(measurepath)
+
+
+def _measure_kidney_mask_shape(roi_vol, roi, dmr_file, series):
+
+    patient, study = series[1], series[2][0]
+
+    dmr = {'data':{}, 'pars':{}}
+
+    # Get skimage features
+    try:
+        results = radiomics.volume_features(roi_vol, roi)
+    except Exception as e:
+        logging.error(f"Patient {patient} {roi} - error computing ski-shapes: {e}")
+    else:
+        dmr['data'] = dmr['data'] | {p: v[1:] for p, v in results.items()}
+        dmr['pars'] = dmr['pars'] | {(patient, study, p): v[0] for p, v in results.items()}
+
+    # Get radiomics shape features
+    try:
+        results = radiomics.shape_features(roi_vol, roi)
+    except Exception as e:
+        logging.error(f"Patient {patient} {roi} - error computing radiomics-shapes: {e}")
+    else:
+        dmr['data'] = dmr['data'] | {p:v[1:] for p, v in results.items()}
+        dmr['pars'] = dmr['pars'] | {(patient, study, p): v[0] for p, v in results.items()}
+
+    # Write results to file
+    pydmr.write(dmr_file, dmr)
 
 
 def measure_texture(build_path, group, site=None):
