@@ -174,7 +174,6 @@ def measure_normalized_mask_shape(build_path):
     os.makedirs(measurepath, exist_ok=True)
 
     all_masks = db.series(maskpath)
-    all_dmr_files = []
 
     for mask_series in tqdm(all_masks, desc='Extracting metrics'):
 
@@ -195,13 +194,12 @@ def measure_normalized_mask_shape(build_path):
             continue
 
         roi_vol = vreg.volume(mask, vol.affine)
-        _measure_kidney_mask_shape(roi_vol, roi, dmr_file, mask_series)
+        _measure_kidney_mask_shape(roi_vol, f"norm_{roi}", dmr_file, mask_series)
 
-        all_dmr_files.append(dmr_file)
-
+    all_dmr_files = [os.path.join(measurepath, f) for f in os.listdir(measurepath) if f.endswith(".dmr.zip") and os.path.isfile(os.path.join(measurepath, f))]
     dmr_file = os.path.join(build_path, 'kidneyvol', f'stage_7_normalized_measures')
     pydmr.concat(all_dmr_files, dmr_file)
-    shutil.rmtree(measurepath)
+
 
 
 def _measure_kidney_mask_shape(roi_vol, roi, dmr_file, series):

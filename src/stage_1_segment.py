@@ -290,4 +290,82 @@ def segment_site(build_path, group, site=None, batch_size=None):
         if batch_size is not None:
             if count >= batch_size:
                 return
+            
+
+def compute_canvas(build_path, group, site=None):
+
+    datapath = os.path.join(build_path, 'dixon', 'stage_2_data') 
+    maskpath = os.path.join(build_path, 'kidneyvol', 'stage_1_segment') 
+    os.makedirs(maskpath, exist_ok=True)
+
+    if group == 'Controls':
+        sitedatapath = os.path.join(datapath, group) 
+        sitemaskpath = os.path.join(maskpath, group)
+    else:
+        sitedatapath = os.path.join(datapath, group, site) 
+        sitemaskpath = os.path.join(maskpath, group, site)
+    os.makedirs(sitemaskpath, exist_ok=True)
+
+    # List of selected dixon series
+    record = utils.data.dixon_record()
+
+    # Get out phase series
+    series = db.series(sitedatapath)
+    series_out_phase = [s for s in series if s[3][0][-9:]=='out_phase']
+
+    # Loop over the out-phase series
+    count = 0
+    for series_op in series_out_phase:
+
+        # Patient and output study
+        patient = series_op[1]
+        study = series_op[2][0]
+        series_op_desc = series_op[3][0]
+        sequence = series_op_desc[:-10]
+
+        # Skip if the patient is not in the right site
+        if patient[:4] not in SITE_IDS[site]:
+            continue
+
+        # Skip if it is not the right sequence
+        selected_sequence = utils.data.dixon_series_desc(record, patient, study)
+        if sequence != selected_sequence:
+            continue
+
+        # Skip if the kidney masks already exist
+        mask_study = [sitemaskpath, patient, (study,0)]
+        mask_series_0 = mask_study + [(f'kidney_canvas_0', 0)]
+        if mask_series_0 in db.series(mask_study):
+            continue
+
+        # Other source data series
+        series_ip = series_op[:3] + [(sequence + '_in_phase', 0)]
+        series_wi = series_op[:3] + [(sequence + '_water', 0)]
+        series_fi = series_op[:3] + [(sequence + '_fat', 0)]
+
+        # This computation needs fat and water images
+        if series_wi not in series:
+            continue
+
+        # Read the out-phase and water volumes
+        try:
+            op = db.volume(series_op)
+            wi = db.volume(series_wi)
+        except Exception as e:
+            logging.error(f"Patient {patient} - error reading I-O {sequence}: {e}")
+            continue
+
+        try:
+            canvas_maps = canvas(op.values, wi.values)
+        except Exception as e:
+            logging.error(f"Error computing canvas for {patient} {sequence}: {e}")
+            continue
+        
+        for i, c in enumerate(canvas_maps):
+            mask_series = mask_study + [f'kidney_canvas_{i}']
+            db.write_volume((c, op.affine), mask_series, ref=series_op)
+
+
+def canvas(op, wi):
+    pass
 
