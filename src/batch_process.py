@@ -7,6 +7,7 @@ import stage_2_display
 import stage_3_edit
 import stage_4_display
 import stage_5_measure
+import stage_5_rsf
 import stage_6_archive
 import stage_7_parametrize
 
@@ -26,8 +27,15 @@ logging.basicConfig(
 
 
 def build_canvas():
-    group = 'Controls'
-    stage_1_segment.compute_canvas(BUILD_PATH, group)
+
+    # stage_0_restore.dixons(ARCHIVE_PATH, BUILD_PATH, 'Patients', 'Leeds')
+    stage_1_segment.compute_canvas(BUILD_PATH, 'Patients', 'Leeds')
+    stage_1_segment.display_canvas(BUILD_PATH, 'Patients', 'Leeds')
+
+
+def preprocess_rsf():
+    # stage_0_restore.edited_segmentations(ARCHIVE_PATH, BUILD_PATH, 'Patients', 'Leeds')
+    stage_5_rsf.compute(BUILD_PATH, 'Patients', 'Leeds')
 
 
 def run_preprocessing():
@@ -106,10 +114,11 @@ def run_shape_analysis():
 if __name__ == '__main__':
 
     # build_canvas()
+    preprocess_rsf()
     # run_preprocessing()
     # run_manual_section()
     # run_postprocessing()
-    run_shape_analysis()
+    # run_shape_analysis()
 
 
     
