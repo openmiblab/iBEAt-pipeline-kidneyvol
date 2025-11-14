@@ -1,0 +1,23 @@
+# Note on the cluster make sure to load modules that match these versions:
+# module load Anaconda3/2024.02-1
+# module load Python/3.10.8-GCCcore-12.2.0 # essential to load latest GCC
+# module load CUDA/11.8.0 # must macth with version in environment.yml
+
+name: corr
+channels:
+  - conda-forge
+  - defaults
+
+dependencies:
+  - python=3.10 # python>3.10 is more risky on HPC
+  - numpy==2.2.6 # was 1.26.4
+  - tqdm==4.67.1
+  - pandas==2.3.2
+  - trimesh==4.8.2
+  - scipy==1.15.3
+  - scikit-learn==1.7.2
+  - pip
+
+  - pip:
+      - dbdicom==0.3.14
+      - vreg==0.0.11

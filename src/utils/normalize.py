@@ -1,8 +1,5 @@
 import numpy as np
-from skimage import measure
-import trimesh
 import vreg
-from scipy.stats import skew as scipy_skew
 
 
 

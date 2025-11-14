@@ -1,6 +1,7 @@
 import os
 import logging
 import json
+import argparse
 
 from tqdm import tqdm
 import numpy as np
@@ -12,6 +13,15 @@ from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
 
 from utils import normalize, sdf, constants, lb
+
+# Configure logging once, at the start of your script
+logging.basicConfig(
+    filename='parametrize.log',      # log file name
+    level=logging.INFO,           # log level
+    format='%(asctime)s - %(levelname)s - %(message)s',  # log format
+)
+
+
 
 
 def normalize_kidneys(build_path):
@@ -344,82 +354,15 @@ def build_dice_correlation_matrix(build_path):
 
             pbar.update(1)
 
-    # Save results as csv
-    dice = pd.DataFrame(dice, columns=labels, index=labels)
-    file = os.path.join(resultspath, f'normalized_kidney_dice.csv')
-    dice.to_csv(file)
+            # Save results as csv
+            dice = pd.DataFrame(dice, columns=labels, index=labels)
+            file = os.path.join(resultspath, f'normalized_kidney_dice.csv')
+            dice.to_csv(file)
 
-    cov = pd.DataFrame(cov, columns=labels, index=labels)
-    file = os.path.join(resultspath, f'normalized_kidney_cov.csv')
-    cov.to_csv(file)
+            cov = pd.DataFrame(cov, columns=labels, index=labels)
+            file = os.path.join(resultspath, f'normalized_kidney_cov.csv')
+            cov.to_csv(file)
 
-
-def build_all_correlation_matrices(build_path):
-
-    datapath = os.path.join(build_path, 'kidneyvol', 'stage_7_normalized')
-    resultspath = os.path.join(build_path, 'kidneyvol', 'stage_7_shape_analysis')
-
-    # Get baseline kidneys
-    kidney_masks = db.series(datapath)
-    kidney_masks = [k for k in kidney_masks if k[2][0] in ['Visit1', 'Baseline']]
-    # kidney_masks = kidney_masks[:2] # !!!! for debugging
-
-    n = len(kidney_masks)
-    dice = np.zeros((n, n))
-    cov = np.zeros((n, n))
-    cov_sdf = np.zeros((n, n))
-    cov_lb = np.zeros((n, n))
-    sdf_cutoff = (32, 32, 32)
-    lb_cutoff = 100
-    labels = []
-
-    pbar = tqdm(total=int(n*(n-1)/2), desc="Computing correlations")
-    for i, kidney_mask_i in enumerate(kidney_masks):
-
-        # Create label
-        patient = kidney_mask_i[1]
-        kidney = 'left' if 'left' in kidney_mask_i[3][0] else 'right'
-        labels.append(f"{patient}_{kidney}")
-
-        # Compute DICE
-        mask_norm_i = db.volume(kidney_mask_i, verbose=0).values
-        sdf_i = sdf.coeffs_from_mask(mask_norm_i, sdf_cutoff, normalize=True)
-        lb_i = lb.eigvals(mask_norm_i, k=lb_cutoff, normalize=True)
-
-        for j, kidney_mask_j in enumerate(kidney_masks[i:]):
-
-            mask_norm_j = db.volume(kidney_mask_j, verbose=0).values
-            sdf_j = sdf.coeffs_from_mask(mask_norm_j, sdf_cutoff, normalize=True)
-            lb_j = lb.eigvals(mask_norm_j, k=lb_cutoff, normalize=True)
-
-            dice[i, i+j] = normalize.dice_coefficient(mask_norm_i, mask_norm_j)
-            cov[i, i+j] = normalize.covariance(mask_norm_i, mask_norm_j)
-            cov_sdf[i, i+j] = normalize.covariance(sdf_i, sdf_j)
-            cov_lb[i, i+j] = normalize.covariance(lb_i, lb_j)
-
-            dice[i+j, i] = dice[i, i+j]
-            cov[i+j, i] = cov[i, i+j]
-            cov_sdf[i+j, i] = cov_sdf[i, i+j]
-            cov_lb[i+j, i] = cov_lb[i, i+j]
-
-            pbar.update(1)
-
-    # Save results as csv
-    dice = pd.DataFrame(dice, columns=labels, index=labels)
-    file = os.path.join(resultspath, f'normalized_kidney_dice.csv')
-    dice.to_csv(file)
-
-    cov = pd.DataFrame(cov, columns=labels, index=labels)
-    file = os.path.join(resultspath, f'normalized_kidney_cov.csv')
-    cov.to_csv(file)
-
-    cov_sdf = pd.DataFrame(cov_sdf, columns=labels, index=labels)
-    file = os.path.join(resultspath, f'normalized_kidney_cov_sdf.csv')
-    cov_sdf.to_csv(file)
-
-    cov_lb = pd.DataFrame(cov_lb, columns=labels, index=labels)
-    file = os.path.join(resultspath, f'normalized_kidney_cov_lb.csv')
-    cov_lb.to_csv(file)
 
 
 
@@ -500,3 +443,15 @@ def principal_component_analysis(build_path):
         # coeffs = features_reduced[0].reshape((32,32,32)) 
         # mask_recon = sdf.mask_from_coeffs(coeffs)
 
+
+if __name__ == '__main__':
+
+    DATA_DIR = r"C:\Users\md1spsx\Documents\Data\iBEAt_Build\kidneyvol\stage_7_normalized"
+    RESULTS_DIR = r"C:\Users\md1spsx\Documents\Data\iBEAt_Build\kidneyvol\stage_7_shape_analysis"
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--data", type=str, default=DATA_DIR, help="Data folder")
+    parser.add_argument("--build", type=str, default=RESULTS_DIR, help="Build folder")
+    args = parser.parse_args()
+
+    build_all_correlation_matrices(args.data, args.build)

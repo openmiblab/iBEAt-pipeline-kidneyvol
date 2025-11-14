@@ -7,7 +7,6 @@ from skimage import measure
 import trimesh
 from scipy.sparse import coo_matrix, diags
 from scipy.sparse.linalg import eigsh
-from scipy.stats import skew 
 
 # -------------------------------
 # Helper: convert trimesh to mask
