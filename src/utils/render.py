@@ -135,44 +135,82 @@ def display_both_surfaces(mask, mask_recon):
 
     plotter.show()
 
-def display_volume(original_volume, voxel_size=(1.0,1.0,1.0)):
-    """
-    Uses pyvista to display a volume,
-    with the reconstructed volume shown as a solid surface,
-    and a wireframe showing the volume boundaries.
-    """
-    voxel_size = np.array(voxel_size, dtype=float)
-    plotter = pv.Plotter(window_size=(800, 600))
-    plotter.background_color = 'white'
-    
-    # Create the original volume mesh from the numpy array
-    mesh = pv.wrap(original_volume)
-    mesh.spacing = voxel_size
 
-    # Contour surface
-    surface = mesh.contour(isosurfaces=[0.5])
-    
-    # Add the original surface to the plotter with transparency
+
+
+import numpy as np
+import pyvista as pv
+
+def display_volume(
+    kidney,
+    kidney_voxel_size=(1.0, 1.0, 1.0),
+    surface_color='lightblue',
+    opacity=1.0,
+    iso_value=0.5,
+    smooth_iters=20,
+):
+    """
+    Display a single kidney mask in a clean single-panel view.
+
+    Parameters
+    ----------
+    kidney : np.ndarray
+        3D binary mask (bool or 0/1).
+    kidney_voxel_size : tuple
+        Voxel spacing (z, y, x) in world units.
+    surface_color : color-like
+        Color used for the kidney surface.
+    opacity : float
+        Surface opacity.
+    iso_value : float
+        Contour threshold for extracting the surface.
+    smooth_iters : int
+        Number of VTK smoothing iterations to apply (0 to disable).
+    """
+
+    # Ensure voxel spacing is an array
+    kidney_voxel_size = np.asarray(kidney_voxel_size, dtype=float)
+
+    # Build plotter
+    plotter = pv.Plotter(window_size=(900, 700))
+    plotter.background_color = "white"
+
+    # Wrap volume and set spacing so bounds are in world coordinates
+    vol = pv.wrap(kidney.astype(float))
+    vol.spacing = kidney_voxel_size
+
+    # Get isosurface
+    surf = vol.contour(isosurfaces=[iso_value])
+    if smooth_iters and smooth_iters > 0:
+        try:
+            surf = surf.smooth(n_iter=smooth_iters, relaxation_factor=0.1)
+        except Exception:
+            # Some VTK builds may not support smooth; ignore if fails
+            pass
+
+    # Main kidney surface
     plotter.add_mesh(
-        surface, 
-        color='blue', 
-        opacity=0.5, 
-        style='surface', 
-        label='Original Volume'
+        surf,
+        color=surface_color,
+        opacity=opacity,
+        smooth_shading=True,
+        specular=0.2,
+        specular_power=20,
+        style='surface',
+        name="Kidney Surface"
     )
 
-    # Add a wireframe box to show the volume boundaries
-    bounds = mesh.bounds  # (xmin, xmax, ymin, ymax, zmin, zmax)
-    box = pv.Box(bounds=bounds)
-    plotter.add_mesh(box, color='black', style='wireframe', line_width=2)
+    # Bounding box (use the volume's bounds)
+    box = pv.Box(bounds=vol.bounds)
+    plotter.add_mesh(box, color="black", style="wireframe", line_width=2, name="Bounds")
 
-    plotter.add_legend()
-    plotter.add_text('3D Volume', font_size=20)
-    add_axes(plotter)
-    
-    # Set the camera position and show the plot
-    plotter.camera_position = 'iso'
-    plotter.show()
+    # Camera & display
+    plotter.camera_position = "iso"
+    plotter.show()  
+
+
+
+
 
 
 import numpy as np

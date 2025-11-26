@@ -1,8 +1,10 @@
 #!/bin/bash
 
-#SBATCH --cpus-per-task=1      # Use 1 CPU cores for data loading
-#SBATCH --mem=64G               # 32 GB of RAM
-#SBATCH --time=72:00:00         # Up to 72 hours of training
+#SBATCH --nodes=1
+#SBATCH --ntasks=1               # one task (one job process)
+#SBATCH --cpus-per-task=8       # 64 CPU cores for that task
+#SBATCH --mem=64G                # 64 GB for the whole node (default is per node)
+#SBATCH --time=72:00:00
 
 # The cluster will send an email to this address if the job fails or ends
 #SBATCH --mail-user=s.sourbron@sheffield.ac.uk
@@ -46,11 +48,8 @@ conda activate corr
 USERNAME=$(whoami)
 
 # Define path variables here
-BASE_DIR="/mnt/parscratch/users/$USERNAME/iBEAt_Build/kidneyvol"
-CODE="$BASE_DIR/iBEAt-pipeline-kidneyvol"
-DATA="$BASE_DIR/stage_7_normalized"
-BUILD="$BASE_DIR/stage_7_shape_analysis"
+PROJ="/mnt/parscratch/users/$USERNAME/iBEAt_Build/kidneyvol"
 
 # srun runs your program on the allocated compute resources managed by Slurm
-srun /users/md1spsx/.conda/envs/corr/bin/python "$CODE/src/stage_7_corr.py" --data="$DATA" --build="$BUILD"
-
+srun /users/md1spsx/.conda/envs/corr/bin/python "$PROJ/iBEAt-pipeline-kidneyvol/src/stage_8_build_features.py" --data="$PROJ"
+srun /users/md1spsx/.conda/envs/corr/bin/python "$PROJ/iBEAt-pipeline-kidneyvol/src/stage_9_build_correlation_matrices.py" --data="$PROJ"

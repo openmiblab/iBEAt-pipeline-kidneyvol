@@ -6,6 +6,43 @@ import re
 import json
 
 
+STUDY_CODE = {
+    'Baseline': 'BL',
+    'Followup': 'FU',
+    'Visit1': 'V1',
+    'Visit2': 'V2',
+    'Visit3': 'V3',
+    'Visit4': 'V4',
+    'Visit5': 'V5',
+    'Visit6': 'V6',
+    'Visit7': 'V7',
+}
+
+SERIES_CODE = {
+    "normalized_right_kidney_mask": 'R',
+    "normalized_left_kidney_mask": 'L',
+}
+
+
+def parse_npz_dbfile(file) -> dict:
+
+    # Parse file path
+    patient = os.path.basename(os.path.dirname(os.path.dirname(file)))
+    patient = patient.split('__')[-1]
+    study = os.path.basename(os.path.dirname(file))
+    study = study.split('__')[-1]
+    kidney = os.path.basename(file)[:-4]
+    kidney = kidney.split('__')[-1]
+
+    # Construct label
+    label = f"{patient}-{STUDY_CODE[study]}-{SERIES_CODE[kidney]}"
+    value = {
+        'Patient': patient, 
+        'Study': study, 
+        'Series': kidney,
+    }
+    return label, value
+
 
 def dixon_record():
     record = os.path.join(os.getcwd(), 'src', 'data', 'dixon_data.csv')

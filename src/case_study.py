@@ -1,11 +1,7 @@
 import os
 
 import dbdicom as db
-import vreg
 import numpy as np
-from totalsegmentator.map_to_binary import class_map
-import napari
-from scipy.fftpack import dctn, idctn
 
 from utils import normalize, render, lb, sdf
 
@@ -117,9 +113,28 @@ def display_normalized():
     print(f"Loss: {np.around(100 * np.abs(lk_mask_recon.sum() - lk_mask_norm.sum()) / lk_mask_norm.sum(), 2) } %")
 
 
+def display_normalized_npz(npz_dir):
+    
+    patient = '7128_014'
+    study_desc = 'Baseline'
+    series_desc = 'normalized_right_kidney_mask'
+    filepath = os.path.join(
+        npz_dir, 
+        f"Patient__{patient}", 
+        f"Study__1__{study_desc}",
+        f"Series__1__{series_desc}.npz",
+    )
+    mask = np.load(filepath)['mask']
+    mask = sdf.smooth_mask(mask, 3 * [32])
+    render.display_volume(mask)
+
 
 if __name__=='__main__':
+
+    NPZ_DIR = r"C:\Users\md1spsx\Documents\Data\iBEAt_Build\kidneyvol\stage_7_normalized_npz"
+
     # display_surface_lb()
     # display_surface_sdf()
     # display_normalized()
-    display_multiple_normalized()
+    # display_multiple_normalized()
+    display_normalized_npz(NPZ_DIR)

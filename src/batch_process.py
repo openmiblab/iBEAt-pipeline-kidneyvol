@@ -9,8 +9,8 @@ import stage_4_display
 import stage_5_measure
 import stage_5_rsf
 import stage_6_archive
-import stage_7_parametrize
-import stage_7_corr
+import src.stage_7_normalize as stage_7_normalize
+import src.stage_9_build_correlation_matrices as stage_9_build_correlation_matrices
 
 
 BUILD_PATH = os.path.join(os.getcwd(), 'build')
@@ -99,7 +99,7 @@ def run_shape_analysis():
     # stage_7_parametrize.display_subject_clusters(BUILD_PATH, DATA_PATH)
     # stage_7_parametrize.display_kidney_clusters(BUILD_PATH, DATA_PATH)
     # stage_5_measure.measure_normalized_mask_shape(BUILD_PATH)
-    stage_7_parametrize.build_dice_correlation_matrix(BUILD_PATH)
+    stage_7_normalize.build_dice_correlation_matrix(BUILD_PATH)
     # stage_7_corr.build_all_correlation_matrices(BUILD_PATH)
 
     # NOTE: Display by site

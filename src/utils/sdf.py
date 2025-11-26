@@ -72,6 +72,17 @@ def compress(mask, keep_shape=(16,16,16)):
 
     return mask_recon, coeffs
 
+def smooth_mask(mask, keep_shape=(16,16,16)):
+    """
+    Full pipeline: mask → SDF → DCT → truncate → reconstruct.
+    Returns:
+        mask_recon   : reconstructed binary mask
+    """
+    mask = np.array(mask, dtype=bool)
+    coeffs = coeffs_from_mask(mask, keep_shape)
+    mask_recon = mask_from_coeffs(coeffs)
+    return mask_recon
+
 
 # -------------------------
 # Dataset-level Pipeline
