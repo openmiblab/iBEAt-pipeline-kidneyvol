@@ -1,6 +1,6 @@
 import numpy as np
 import vreg
-
+from scipy.ndimage import rotate
 
 
 # -------------------------------
@@ -61,6 +61,103 @@ def dice_coefficient(mask1: np.ndarray, mask2: np.ndarray) -> float:
     if size_sum == 0:
         return 1.0  # Both masks empty → perfect similarity
     return 2.0 * intersection / size_sum
+
+
+def advance_dice_coefficient(
+    mask_ref: np.ndarray,
+    mask_to_rotate: np.ndarray,
+    axis: int = 2, #rotation in Z axis, (X,Y,Z)
+    angle_range=(0.0, 360.0),
+    angle_step: float = 1.0,
+    return_angle: bool = False,
+    return_mask: bool = False,
+):
+    """
+    Rotate a 3D mask around a selected axis and compute the Dice score
+    across all angles. By default returns only the maximum Dice score.
+
+    Parameters
+    ----------
+    mask_ref : np.ndarray
+        Reference 3D binary mask (fixed).
+    mask_to_rotate : np.ndarray
+        Moving 3D binary mask to be rotated.
+    axis : int, default=2
+        Axis of rotation (0, 1, or 2).
+    angle_range : tuple, default=(0.0, 360.0)
+        Range of rotation angles.
+    angle_step : float, default=1.0
+        Step size in degrees.
+    return_angle : bool, default=False
+        If True, also return the best angle.
+    return_mask : bool, default=False
+        If True, also return the rotated mask at that angle.
+
+    Returns
+    -------
+    best_dice : float
+        Highest Dice score found.
+    (optionally) best_angle : float
+    (optionally) best_rotated_mask : np.ndarray
+    """
+
+    if mask_ref.shape != mask_to_rotate.shape:
+        raise ValueError("mask_ref and mask_to_rotate must have the same shape")
+
+    # --- inner Dice function ---
+    def dice_coefficient(m1: np.ndarray, m2: np.ndarray) -> float:
+        m1 = m1.astype(bool)
+        m2 = m2.astype(bool)
+        intersection = np.logical_and(m1, m2).sum()
+        size_sum = m1.sum() + m2.sum()
+        if size_sum == 0:
+            return 1.0
+        return 2.0 * intersection / size_sum
+
+    # Select rotation plane
+    if axis == 0:
+        rot_axes = (1, 2)
+    elif axis == 1:
+        rot_axes = (0, 2)
+    elif axis == 2:
+        rot_axes = (0, 1)
+    else:
+        raise ValueError("axis must be 0, 1, or 2")
+
+    start, end = angle_range
+    angles = np.arange(start, end, angle_step)
+
+    best_dice = -1.0
+    best_angle = None
+    best_rotated = None
+
+    for angle in angles:
+        rotated = rotate(
+            mask_to_rotate,
+            angle=angle,
+            axes=rot_axes,
+            reshape=False,
+            order=0,         # nearest-neighbor for binary masks
+            mode='constant',
+            cval=0.0
+        )
+
+        d = dice_coefficient(mask_ref, rotated)
+
+        if d > best_dice:
+            best_dice = d
+            best_angle = angle
+            best_rotated = rotated
+
+    # --- return logic ---
+    if not return_angle and not return_mask:
+        return best_dice
+    elif return_angle and not return_mask:
+        return best_dice, best_angle
+    elif return_angle and return_mask:
+        return best_dice, best_angle, best_rotated
+    else:  # return_mask=True but return_angle=False
+        return best_dice, best_rotated
 
 
 
